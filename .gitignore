@@ -34,3 +34,6 @@ go.work.sum
 # Frontend build artifacts
 webapp/node_modules/
 webapp/build/
+bin/
+.taskmaster/
+shrimp-rules.md

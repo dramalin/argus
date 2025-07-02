@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
+
+	"argus/internal/alerts/evaluator"
+	"argus/internal/alerts/notifier"
+	"argus/internal/api"
+	"argus/internal/storage"
 )
 
 // setupLogger configures structured logging
@@ -197,6 +203,17 @@ func getProcess(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// getEnvAsInt gets an environment variable as an integer with a default value
+func getEnvAsInt(key string, defaultVal int) int {
+	if value := os.Getenv(key); value != "" {
+		if i, err := strconv.Atoi(value); err == nil {
+			return i
+		}
+		slog.Warn("Invalid integer value for environment variable", "key", key, "value", value, "using_default", defaultVal)
+	}
+	return defaultVal
+}
+
 func main() {
 	// Setup structured logging
 	setupLogger()
@@ -215,6 +232,63 @@ func main() {
 
 	slog.Info("Middleware configured successfully")
 
+	// Initialize alert storage
+	configDir := ".argus/config"
+	alertStore, err := storage.NewAlertStore(configDir)
+	if err != nil {
+		slog.Error("Failed to initialize alert storage", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Alert storage initialized successfully", "config_dir", configDir)
+
+	// Initialize alert evaluator
+	evalConfig := evaluator.DefaultConfig()
+	alertEvaluator := evaluator.NewEvaluator(alertStore, evalConfig)
+
+	// Create a context for the evaluator
+	evalCtx, evalCancel := context.WithCancel(context.Background())
+	defer evalCancel()
+
+	// Start the evaluator
+	if err := alertEvaluator.Start(evalCtx); err != nil {
+		slog.Error("Failed to start alert evaluator", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Alert evaluator started successfully")
+
+	// Initialize notification system
+	notifierConfig := notifier.DefaultConfig()
+	alertNotifier := notifier.NewNotifier(notifierConfig)
+
+	// Register notification channels
+	inAppChannel := notifier.NewInAppChannel(100) // Store up to 100 notifications
+	alertNotifier.RegisterChannel(inAppChannel)
+
+	// Register email notification if configured
+	if os.Getenv("SMTP_HOST") != "" {
+		emailConfig := &notifier.EmailConfig{
+			Host:     os.Getenv("SMTP_HOST"),
+			Port:     getEnvAsInt("SMTP_PORT", 587), // Convert string to int with default value
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     os.Getenv("SMTP_FROM"),
+		}
+		emailChannel := notifier.NewEmailChannel(emailConfig)
+		alertNotifier.RegisterChannel(emailChannel)
+		slog.Info("Email notification channel registered successfully")
+	}
+
+	// Connect evaluator events to notifier
+	go func() {
+		for event := range alertEvaluator.Events() {
+			alertNotifier.ProcessEvent(event)
+		}
+	}()
+	slog.Info("Alert notification system initialized successfully")
+
+	// Create API handlers
+	alertsHandler := api.NewAlertsHandler(alertStore, alertEvaluator, alertNotifier)
+
 	// Serve static files from webapp directory
 	router.Static("/static", "./webapp")
 	router.StaticFile("/", "./webapp/index.html")
@@ -222,12 +296,15 @@ func main() {
 	slog.Info("Static file serving configured", "webapp_path", "./webapp")
 
 	// API routes
-	api := router.Group("/api")
+	apiGroup := router.Group("/api")
 	{
-		api.GET("/cpu", getCPU)
-		api.GET("/memory", getMemory)
-		api.GET("/network", getNetwork)
-		api.GET("/process", getProcess)
+		apiGroup.GET("/cpu", getCPU)
+		apiGroup.GET("/memory", getMemory)
+		apiGroup.GET("/network", getNetwork)
+		apiGroup.GET("/process", getProcess)
+
+		// Register alert API routes
+		alertsHandler.RegisterRoutes(apiGroup)
 	}
 
 	// Health check endpoint
@@ -259,6 +336,9 @@ func main() {
 	<-quit
 
 	slog.Info("Shutting down server...")
+
+	// Cancel the evaluator context to stop it
+	evalCancel()
 
 	// Give outstanding requests 30 seconds to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
