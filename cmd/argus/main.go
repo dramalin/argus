@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +16,29 @@ import (
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 )
+
+// setupLogger configures structured logging
+func setupLogger() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+}
+
+// loggingMiddleware logs HTTP requests
+func loggingMiddleware() gin.HandlerFunc {
+	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		slog.Info("HTTP Request",
+			"method", param.Method,
+			"path", param.Path,
+			"status", param.StatusCode,
+			"latency", param.Latency,
+			"client_ip", param.ClientIP,
+			"user_agent", param.Request.UserAgent(),
+		)
+		return ""
+	})
+}
 
 // CORS middleware
 func corsMiddleware() gin.HandlerFunc {
@@ -30,22 +58,32 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 func getCPU(c *gin.Context) {
+	slog.Debug("Fetching CPU metrics")
+
 	loadAvg, err := load.Avg()
 	if err != nil {
+		slog.Error("Failed to get load average", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get load average: " + err.Error()})
 		return
 	}
-	
+
 	cpuPercent, err := cpu.Percent(time.Second, false)
 	if err != nil {
+		slog.Error("Failed to get CPU usage", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get CPU usage: " + err.Error()})
 		return
 	}
-	
+
 	usage := 0.0
 	if len(cpuPercent) > 0 {
 		usage = cpuPercent[0]
 	}
+
+	slog.Debug("CPU metrics retrieved successfully",
+		"load1", loadAvg.Load1,
+		"load5", loadAvg.Load5,
+		"load15", loadAvg.Load15,
+		"usage_percent", usage)
 
 	c.JSON(http.StatusOK, gin.H{
 		"load1":         loadAvg.Load1,
@@ -56,12 +94,21 @@ func getCPU(c *gin.Context) {
 }
 
 func getMemory(c *gin.Context) {
+	slog.Debug("Fetching memory metrics")
+
 	vm, err := mem.VirtualMemory()
 	if err != nil {
+		slog.Error("Failed to get memory info", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get memory info: " + err.Error()})
 		return
 	}
-	
+
+	slog.Debug("Memory metrics retrieved successfully",
+		"total", vm.Total,
+		"used", vm.Used,
+		"free", vm.Free,
+		"used_percent", vm.UsedPercent)
+
 	c.JSON(http.StatusOK, gin.H{
 		"total":        vm.Total,
 		"used":         vm.Used,
@@ -71,18 +118,29 @@ func getMemory(c *gin.Context) {
 }
 
 func getNetwork(c *gin.Context) {
+	slog.Debug("Fetching network metrics")
+
 	ioCounters, err := net.IOCounters(false)
 	if err != nil {
+		slog.Error("Failed to get network stats", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network stats: " + err.Error()})
 		return
 	}
-	
+
 	if len(ioCounters) == 0 {
+		slog.Warn("No network interfaces found")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "No network interfaces found"})
 		return
 	}
-	
+
 	io := ioCounters[0]
+
+	slog.Debug("Network metrics retrieved successfully",
+		"bytes_sent", io.BytesSent,
+		"bytes_recv", io.BytesRecv,
+		"packets_sent", io.PacketsSent,
+		"packets_recv", io.PacketsRecv)
+
 	c.JSON(http.StatusOK, gin.H{
 		"bytes_sent":   io.BytesSent,
 		"bytes_recv":   io.BytesRecv,
@@ -92,36 +150,39 @@ func getNetwork(c *gin.Context) {
 }
 
 func getProcess(c *gin.Context) {
+	slog.Debug("Fetching process metrics")
+
 	procs, err := process.Processes()
 	if err != nil {
+		slog.Error("Failed to get process list", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get process list: " + err.Error()})
 		return
 	}
-	
+
 	result := []gin.H{}
 	count := 0
-	
+
 	// Limit to top 20 processes to avoid overwhelming the frontend
 	for _, p := range procs {
 		if count >= 20 {
 			break
 		}
-		
+
 		name, err := p.Name()
 		if err != nil {
 			continue
 		}
-		
+
 		cpuP, err := p.CPUPercent()
 		if err != nil {
 			cpuP = 0.0
 		}
-		
+
 		memP, err := p.MemoryPercent()
 		if err != nil {
 			memP = 0.0
 		}
-		
+
 		result = append(result, gin.H{
 			"pid":         p.Pid,
 			"name":        name,
@@ -130,23 +191,36 @@ func getProcess(c *gin.Context) {
 		})
 		count++
 	}
-	
+
+	slog.Debug("Process metrics retrieved successfully", "process_count", len(result))
+
 	c.JSON(http.StatusOK, result)
 }
 
 func main() {
+	// Setup structured logging
+	setupLogger()
+
+	slog.Info("Starting Argus System Monitor")
+
 	// Set Gin to release mode for production
 	gin.SetMode(gin.ReleaseMode)
-	
-	router := gin.Default()
-	
-	// Add CORS middleware
+
+	router := gin.New()
+
+	// Add middleware
+	router.Use(loggingMiddleware())
 	router.Use(corsMiddleware())
-	
+	router.Use(gin.Recovery())
+
+	slog.Info("Middleware configured successfully")
+
 	// Serve static files from webapp directory
 	router.Static("/static", "./webapp")
 	router.StaticFile("/", "./webapp/index.html")
-	
+
+	slog.Info("Static file serving configured", "webapp_path", "./webapp")
+
 	// API routes
 	api := router.Group("/api")
 	{
@@ -158,8 +232,42 @@ func main() {
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
+		slog.Debug("Health check requested")
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 	})
 
-	router.Run(":8080")
+	slog.Info("API routes configured successfully")
+
+	// Create HTTP server
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
+
+	// Start server in a goroutine
+	go func() {
+		slog.Info("Starting HTTP server", "address", ":8080", "url", "http://localhost:8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Failed to start server", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	slog.Info("Shutting down server...")
+
+	// Give outstanding requests 30 seconds to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("Server shutdown completed successfully")
 }
