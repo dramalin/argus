@@ -38,6 +38,8 @@ A real-time Linux system performance monitoring web application built with Go (G
 
 ### Running the Application
 
+#### Option 1: Using Makefile (Recommended)
+
 1. **Clone and navigate to the project:**
 
    ```bash
@@ -45,19 +47,42 @@ A real-time Linux system performance monitoring web application built with Go (G
    cd argus
    ```
 
-2. **Install dependencies:**
+2. **View available commands:**
+
+   ```bash
+   make help
+   ```
+
+3. **Quick start (build and run):**
+
+   ```bash
+   make start
+   ```
+
+4. **Development mode (with auto-reload):**
+
+   ```bash
+   make dev
+   ```
+
+5. **Access the web interface:**
+   Open your browser to [http://localhost:8080](http://localhost:8080)
+
+#### Option 2: Using Go directly
+
+1. **Install dependencies:**
 
    ```bash
    go mod tidy
    ```
 
-3. **Run the application:**
+2. **Run the application:**
 
    ```bash
    go run cmd/argus/main.go
    ```
 
-4. **Access the web interface:**
+3. **Access the web interface:**
    Open your browser to [http://localhost:8080](http://localhost:8080)
 
 ### Testing the API
@@ -88,6 +113,50 @@ curl http://localhost:8080/api/network
 curl http://localhost:8080/api/process
 ```
 
+## Makefile Commands
+
+The project includes a comprehensive Makefile with many useful targets:
+
+### Development Commands
+
+- `make run` - Run the application in development mode
+- `make dev` - Run with auto-reload (requires air)
+- `make start` - Quick start (build and run)
+- `make build` - Build the binary
+- `make clean` - Clean build artifacts
+
+### Testing & Quality
+
+- `make test` - Run all tests
+- `make test-race` - Run tests with race detector
+- `make test-cover` - Run tests with coverage
+- `make bench` - Run benchmarks
+- `make lint` - Run linters
+- `make fmt` - Format Go code
+- `make vet` - Run go vet
+- `make api-test` - Test API endpoints
+
+### Dependencies
+
+- `make mod-tidy` - Tidy up module dependencies
+- `make deps-check` - Check for outdated dependencies
+- `make deps-update` - Update all dependencies
+
+### Release & Deployment
+
+- `make release-build` - Build release binaries for multiple platforms
+- `make docker-build` - Build Docker image
+- `make docker-run` - Run Docker container
+- `make install` - Install the binary to GOPATH/bin
+
+### Setup & Tools
+
+- `make setup-dev` - Setup development environment
+- `make git-hooks` - Setup git hooks
+- `make security` - Run security checks
+- `make all` - Run quality checks and build
+- `make ci` - Continuous integration checks
+
 ## Project Structure
 
 ```
@@ -98,6 +167,7 @@ argus/
 │   └── app.js                # React application
 ├── docs/argus_prd.md         # Product Requirements Document
 ├── test_api.sh               # API testing script
+├── Makefile                  # Build automation and development tasks
 ├── go.mod                    # Go module dependencies
 └── README.md                 # This file
 ```
