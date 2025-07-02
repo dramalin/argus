@@ -190,6 +190,31 @@
 				margin-bottom: 30px;
 			}
 
+			.alert-management-tabs {
+				display: flex;
+				border-bottom: 1px solid #dee2e6;
+				margin-bottom: 20px;
+			}
+
+			.alert-tab {
+				padding: 10px 20px;
+				cursor: pointer;
+				font-weight: 500;
+				color: #555;
+				border-bottom: 3px solid transparent;
+				transition: all 0.2s ease;
+				margin-right: 5px;
+			}
+
+			.alert-tab:hover {
+				color: #667eea;
+			}
+
+			.alert-tab.active {
+				color: #667eea;
+				border-bottom-color: #667eea;
+			}
+
 			.alert-list-header {
 				display: flex;
 				justify-content: space-between;
@@ -550,6 +575,247 @@
 				background-color: #f0f4ff;
 			}
 
+			/* Alert Status Dashboard Styles */
+			.alert-status-dashboard {
+				margin-bottom: 30px;
+			}
+
+			.alert-summary-panel {
+				display: grid;
+				grid-template-columns: repeat(
+					auto-fit,
+					minmax(150px, 1fr)
+				);
+				gap: 15px;
+				margin-bottom: 20px;
+			}
+
+			.alert-summary-item {
+				background: white;
+				border-radius: 8px;
+				padding: 15px;
+				text-align: center;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+				transition: transform 0.2s ease;
+			}
+
+			.alert-summary-item:hover {
+				transform: translateY(-3px);
+			}
+
+			.alert-summary-item.active {
+				background-color: #fff5f5;
+				border-left: 4px solid #dc3545;
+			}
+
+			.alert-summary-value {
+				font-size: 2rem;
+				font-weight: 600;
+				color: #444;
+				margin-bottom: 5px;
+			}
+
+			.alert-summary-item.active .alert-summary-value {
+				color: #dc3545;
+			}
+
+			.alert-summary-label {
+				font-size: 0.9rem;
+				color: #666;
+			}
+
+			.active-alerts-panel {
+				background: white;
+				border-radius: 8px;
+				padding: 20px;
+				margin-bottom: 20px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+			}
+
+			.panel-title {
+				font-size: 1.2rem;
+				font-weight: 600;
+				margin-bottom: 15px;
+				color: #444;
+				border-bottom: 2px solid #667eea;
+				padding-bottom: 8px;
+			}
+
+			.active-alerts-list {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			.active-alert-item {
+				background: #f8f9fa;
+				border-radius: 6px;
+				padding: 12px;
+				border-left: 4px solid #667eea;
+			}
+
+			.active-alert-item.severity-critical {
+				background-color: #fff5f5;
+				border-left-color: #dc3545;
+			}
+
+			.active-alert-item.severity-warning {
+				background-color: #fff9e6;
+				border-left-color: #ffc107;
+			}
+
+			.active-alert-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 8px;
+			}
+
+			.active-alert-name {
+				font-weight: 600;
+				font-size: 1rem;
+			}
+
+			.active-alert-message {
+				margin-bottom: 10px;
+				font-size: 0.95rem;
+			}
+
+			.active-alert-details {
+				display: flex;
+				justify-content: space-between;
+				font-size: 0.85rem;
+				color: #666;
+			}
+
+			.status-overview-panel {
+				background: white;
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+			}
+
+			.status-table {
+				width: 100%;
+				border-collapse: collapse;
+			}
+
+			.status-table th,
+			.status-table td {
+				padding: 12px;
+				text-align: left;
+				border-bottom: 1px solid #eee;
+			}
+
+			.status-table th {
+				background: #f8f9fa;
+				font-weight: 600;
+				color: #555;
+			}
+
+			.status-table tr.status-active {
+				background-color: #fff5f5;
+			}
+
+			.status-table tr:hover {
+				background-color: #f8f9fa;
+			}
+
+			/* Alert History View Styles */
+			.alert-history-view {
+				background: white;
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+				margin-bottom: 30px;
+			}
+
+			.history-filters {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 15px;
+				margin-bottom: 20px;
+				padding-bottom: 15px;
+				border-bottom: 1px solid #eee;
+			}
+
+			.filter-group {
+				display: flex;
+				flex-direction: column;
+				min-width: 150px;
+			}
+
+			.filter-group label {
+				font-size: 0.85rem;
+				font-weight: 500;
+				margin-bottom: 5px;
+				color: #555;
+			}
+
+			.filter-select {
+				padding: 8px 12px;
+				border: 1px solid #ced4da;
+				border-radius: 4px;
+				font-size: 0.9rem;
+			}
+
+			.history-table {
+				width: 100%;
+				border-collapse: collapse;
+			}
+
+			.history-table th,
+			.history-table td {
+				padding: 12px;
+				text-align: left;
+				border-bottom: 1px solid #eee;
+			}
+
+			.history-table th {
+				background: #f8f9fa;
+				font-weight: 600;
+				color: #555;
+				cursor: pointer;
+				user-select: none;
+			}
+
+			.history-table th:hover {
+				background: #e9ecef;
+			}
+
+			.history-table th.sort-asc::after {
+				content: " ▲";
+				font-size: 0.8rem;
+			}
+
+			.history-table th.sort-desc::after {
+				content: " ▼";
+				font-size: 0.8rem;
+			}
+
+			.history-row.history-active {
+				background-color: #fff5f5;
+			}
+
+			.history-row:hover {
+				background-color: #f8f9fa;
+			}
+
+			.history-time {
+				white-space: nowrap;
+			}
+
+			.history-message {
+				max-width: 400px;
+			}
+
+			.no-history {
+				text-align: center;
+				padding: 30px;
+				color: #6c757d;
+				font-style: italic;
+			}
+
 			@media (max-width: 768px) {
 				.dashboard {
 					grid-template-columns: 1fr;
@@ -581,5 +847,6 @@
 		<div id="root"></div>
 		<script src="app.js"></script>
 		<script src="alerts.js"></script>
+		<script src="alert-status.js"></script>
 	</body>
 </html>

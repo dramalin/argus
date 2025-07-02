@@ -658,7 +658,7 @@ function NotificationList() {
 
 // Main alert management component
 function AlertManagement() {
-	const [view, setView] = useState('list'); // 'list', 'form', 'notifications'
+	const [view, setView] = useState('list'); // 'list', 'form', 'notifications', 'status', 'history'
 	const [selectedAlert, setSelectedAlert] = useState(null);
 
 	// Switch to alert form view for creating a new alert
@@ -747,6 +747,28 @@ function AlertManagement() {
 		setView('list');
 	};
 
+	// Navigation tabs for different views
+	const renderNavigation = () => {
+		return React.createElement('div', { className: 'alert-management-tabs' },
+			React.createElement('div', {
+				className: `alert-tab ${view === 'status' ? 'active' : ''}`,
+				onClick: () => setView('status')
+			}, 'Alert Status'),
+			React.createElement('div', {
+				className: `alert-tab ${view === 'list' ? 'active' : ''}`,
+				onClick: () => setView('list')
+			}, 'Alert Configurations'),
+			React.createElement('div', {
+				className: `alert-tab ${view === 'history' ? 'active' : ''}`,
+				onClick: () => setView('history')
+			}, 'Alert History'),
+			React.createElement('div', {
+				className: `alert-tab ${view === 'notifications' ? 'active' : ''}`,
+				onClick: () => setView('notifications')
+			}, 'Notifications')
+		);
+	};
+
 	// Render the appropriate view
 	const renderView = () => {
 		switch (view) {
@@ -758,16 +780,16 @@ function AlertManagement() {
 				});
 			case 'notifications':
 				return React.createElement(NotificationList);
+			case 'status':
+				return React.createElement(window.AlertStatusDashboard);
+			case 'history':
+				return React.createElement(window.AlertHistoryView);
 			case 'list':
 			default:
 				return React.createElement(React.Fragment, null,
 					React.createElement('div', { className: 'alert-list-header' },
 						React.createElement('h3', null, 'Alert Configurations'),
 						React.createElement('div', { className: 'alert-actions' },
-							React.createElement('button', {
-								className: 'btn btn-secondary',
-								onClick: () => setView('notifications')
-							}, 'View Notifications'),
 							React.createElement('button', {
 								className: 'btn btn-primary',
 								onClick: handleAddAlert
@@ -784,6 +806,7 @@ function AlertManagement() {
 	};
 
 	return React.createElement('div', { className: 'alert-management' },
+		renderNavigation(),
 		renderView()
 	);
 }
