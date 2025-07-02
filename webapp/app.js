@@ -243,6 +243,7 @@ function App() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' or 'alerts'
 
   // History for charts (keep last 20 data points)
   const [cpuHistory, setCpuHistory] = useState([]);
@@ -310,6 +311,114 @@ function App() {
     );
   }
 
+  // Navigation tabs
+  const renderNavigation = () => {
+    return React.createElement('div', { className: 'navigation-tabs' },
+      React.createElement('div', {
+        className: `nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`,
+        onClick: () => setActiveTab('dashboard')
+      }, 'System Dashboard'),
+      React.createElement('div', {
+        className: `nav-tab ${activeTab === 'alerts' ? 'active' : ''}`,
+        onClick: () => setActiveTab('alerts')
+      }, 'Alert Management')
+    );
+  };
+
+  // Main content based on active tab
+  const renderContent = () => {
+    if (activeTab === 'alerts') {
+      return React.createElement(window.AlertManagement);
+    }
+
+    // Default dashboard content
+    return React.createElement(React.Fragment, null,
+      // Dashboard cards
+      React.createElement('div', { className: 'dashboard' },
+        // CPU Card
+        React.createElement('div', { className: 'card' },
+          React.createElement('h3', { className: 'card-title' }, 'CPU Usage'),
+          cpu && React.createElement('div', null,
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Current Usage:'),
+              React.createElement('span', { className: 'metric-value' }, cpu.usage_percent.toFixed(1) + '%')
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Load Average (1m):'),
+              React.createElement('span', { className: 'metric-value' }, cpu.load1.toFixed(2))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Load Average (5m):'),
+              React.createElement('span', { className: 'metric-value' }, cpu.load5.toFixed(2))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Load Average (15m):'),
+              React.createElement('span', { className: 'metric-value' }, cpu.load15.toFixed(2))
+            ),
+            React.createElement('div', { className: 'chart-container' },
+              React.createElement(CPUChart, { data: cpu, history: cpuHistory })
+            )
+          )
+        ),
+
+        // Memory Card
+        React.createElement('div', { className: 'card' },
+          React.createElement('h3', { className: 'card-title' }, 'Memory Usage'),
+          memory && React.createElement('div', null,
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Total:'),
+              React.createElement('span', { className: 'metric-value' }, formatBytes(memory.total))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Used:'),
+              React.createElement('span', { className: 'metric-value' }, formatBytes(memory.used))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Free:'),
+              React.createElement('span', { className: 'metric-value' }, formatBytes(memory.free))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Usage:'),
+              React.createElement('span', { className: 'metric-value' }, memory.used_percent.toFixed(1) + '%')
+            ),
+            React.createElement('div', { className: 'chart-container' },
+              React.createElement(MemoryChart, { data: memory })
+            )
+          )
+        ),
+
+        // Network Card
+        React.createElement('div', { className: 'card' },
+          React.createElement('h3', { className: 'card-title' }, 'Network Statistics'),
+          network && React.createElement('div', null,
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Bytes Sent:'),
+              React.createElement('span', { className: 'metric-value' }, formatBytes(network.bytes_sent))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Bytes Received:'),
+              React.createElement('span', { className: 'metric-value' }, formatBytes(network.bytes_recv))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Packets Sent:'),
+              React.createElement('span', { className: 'metric-value' }, formatNumber(network.packets_sent))
+            ),
+            React.createElement('div', { className: 'metric' },
+              React.createElement('span', { className: 'metric-label' }, 'Packets Received:'),
+              React.createElement('span', { className: 'metric-value' }, formatNumber(network.packets_recv))
+            ),
+            React.createElement('div', { className: 'chart-container' },
+              React.createElement(NetworkChart, { data: network, history: networkHistory })
+            )
+          )
+        )
+      ),
+
+      // Process Table
+      processes.length > 0 && React.createElement(ProcessTable, { processes })
+    );
+  };
+
   return React.createElement('div', { className: 'container' },
     // Header
     React.createElement('div', { className: 'header' },
@@ -327,89 +436,11 @@ function App() {
       'Error: ', error
     ),
 
-    // Dashboard cards
-    React.createElement('div', { className: 'dashboard' },
-      // CPU Card
-      React.createElement('div', { className: 'card' },
-        React.createElement('h3', { className: 'card-title' }, 'CPU Usage'),
-        cpu && React.createElement('div', null,
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Current Usage:'),
-            React.createElement('span', { className: 'metric-value' }, cpu.usage_percent.toFixed(1) + '%')
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Load Average (1m):'),
-            React.createElement('span', { className: 'metric-value' }, cpu.load1.toFixed(2))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Load Average (5m):'),
-            React.createElement('span', { className: 'metric-value' }, cpu.load5.toFixed(2))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Load Average (15m):'),
-            React.createElement('span', { className: 'metric-value' }, cpu.load15.toFixed(2))
-          ),
-          React.createElement('div', { className: 'chart-container' },
-            React.createElement(CPUChart, { data: cpu, history: cpuHistory })
-          )
-        )
-      ),
+    // Navigation
+    renderNavigation(),
 
-      // Memory Card
-      React.createElement('div', { className: 'card' },
-        React.createElement('h3', { className: 'card-title' }, 'Memory Usage'),
-        memory && React.createElement('div', null,
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Total:'),
-            React.createElement('span', { className: 'metric-value' }, formatBytes(memory.total))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Used:'),
-            React.createElement('span', { className: 'metric-value' }, formatBytes(memory.used))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Free:'),
-            React.createElement('span', { className: 'metric-value' }, formatBytes(memory.free))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Usage:'),
-            React.createElement('span', { className: 'metric-value' }, memory.used_percent.toFixed(1) + '%')
-          ),
-          React.createElement('div', { className: 'chart-container' },
-            React.createElement(MemoryChart, { data: memory })
-          )
-        )
-      ),
-
-      // Network Card
-      React.createElement('div', { className: 'card' },
-        React.createElement('h3', { className: 'card-title' }, 'Network Statistics'),
-        network && React.createElement('div', null,
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Bytes Sent:'),
-            React.createElement('span', { className: 'metric-value' }, formatBytes(network.bytes_sent))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Bytes Received:'),
-            React.createElement('span', { className: 'metric-value' }, formatBytes(network.bytes_recv))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Packets Sent:'),
-            React.createElement('span', { className: 'metric-value' }, formatNumber(network.packets_sent))
-          ),
-          React.createElement('div', { className: 'metric' },
-            React.createElement('span', { className: 'metric-label' }, 'Packets Received:'),
-            React.createElement('span', { className: 'metric-value' }, formatNumber(network.packets_recv))
-          ),
-          React.createElement('div', { className: 'chart-container' },
-            React.createElement(NetworkChart, { data: network, history: networkHistory })
-          )
-        )
-      )
-    ),
-
-    // Process Table
-    processes.length > 0 && React.createElement(ProcessTable, { processes })
+    // Main content
+    renderContent()
   );
 }
 
