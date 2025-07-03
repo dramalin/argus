@@ -9,6 +9,11 @@ A real-time Linux system performance monitoring web application built with Go (G
 - **Responsive Design**: Modern, mobile-friendly interface
 - **RESTful API**: Clean API endpoints for system data
 - **Process Management**: Sortable process table with CPU and memory usage
+- **Task Management**: Schedule and run system maintenance tasks with cron expressions
+  - Log Rotation: Automatically rotate and archive log files
+  - Metrics Aggregation: Collect and aggregate system metrics
+  - Health Checks: Monitor system and service health
+  - System Cleanup: Purge old temporary files
 
 ## Architecture
 
@@ -27,6 +32,13 @@ A real-time Linux system performance monitoring web application built with Go (G
 | `/api/memory` | GET | Memory usage statistics | `{"total": uint64, "used": uint64, "free": uint64, "used_percent": float}` |
 | `/api/network` | GET | Network traffic data | `{"bytes_sent": uint64, "bytes_recv": uint64, "packets_sent": uint64, "packets_recv": uint64}` |
 | `/api/process` | GET | Process resource usage | `[{"pid": int, "name": string, "cpu_percent": float, "mem_percent": float}, ...]` |
+| `/api/tasks` | GET | List all tasks | `[{"id": string, "name": string, "type": string, "enabled": bool, ...}, ...]` |
+| `/api/tasks` | POST | Create a new task | Request: Task configuration, Response: Created task |
+| `/api/tasks/:id` | GET | Get a specific task | `{"id": string, "name": string, "type": string, "enabled": bool, ...}` |
+| `/api/tasks/:id` | PUT | Update a task | Request: Updated task, Response: Updated task |
+| `/api/tasks/:id` | DELETE | Delete a task | `{"success": bool, "message": string}` |
+| `/api/tasks/:id/executions` | GET | Get task execution history | `[{"id": string, "task_id": string, "status": string, "start_time": string, ...}, ...]` |
+| `/api/tasks/:id/run` | POST | Run a task immediately | `{"id": string, "task_id": string, "status": string, ...}` |
 | `/health` | GET | Health check | `{"status": "healthy"}` |
 
 ## Installation & Usage
@@ -162,9 +174,19 @@ The project includes a comprehensive Makefile with many useful targets:
 ```
 argus/
 ├── cmd/argus/main.go          # Main application entry point
+├── internal/                  # Internal packages
+│   ├── api/                  # API handlers
+│   │   ├── tasks.go         # Task management API
+│   ├── tasks/                # Task management system
+│   │   ├── types.go         # Task types and models
+│   │   ├── runner.go        # Task runners
+│   │   ├── scheduler.go     # Task scheduler
+│   │   └── repository/      # Task persistence
+│   │       └── repository.go # File-based storage
 ├── webapp/                    # Frontend assets
 │   ├── index.html            # Main HTML file
-│   └── app.js                # React application
+│   ├── app.js                # React application
+│   └── alerts.js             # Alert handling
 ├── docs/argus_prd.md         # Product Requirements Document
 ├── test_api.sh               # API testing script
 ├── Makefile                  # Build automation and development tasks
@@ -256,3 +278,97 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Task Management
+
+The system includes a task management system for scheduling and running system maintenance tasks. Tasks are defined by their configuration and can run on a schedule or be triggered manually.
+
+### Supported Task Types
+
+1. **Log Rotation (`log_rotation`)**
+   - Rotates and archives log files based on size
+   - Parameters: 
+     - `log_dir` - Directory containing log files
+     - `pattern` - File pattern to match (e.g., "*.log")
+     - `max_size_mb` - Maximum file size before rotation
+     - `keep_count` - Number of rotated logs to retain
+
+2. **Metrics Aggregation (`metrics_aggregation`)**
+   - Collects and aggregates system metrics
+   - Parameters:
+     - `metrics_dir` - Directory for metrics storage
+     - `retention_days` - Days to keep metrics data
+
+3. **Health Check (`health_check`)**
+   - Monitors system and service health
+   - Parameters:
+     - `url` - URL to check (HTTP/HTTPS)
+     - `timeout` - Request timeout in seconds
+
+4. **System Cleanup (`system_cleanup`)**
+   - Purges old temporary files
+   - Parameters:
+     - `cleanup_dir` - Directory to clean
+     - `pattern` - File pattern to match (e.g., "*.tmp")
+     - `retention_days` - Days to keep files
+
+### Task Configuration
+
+Tasks use [cron expressions](https://en.wikipedia.org/wiki/Cron) to schedule recurring execution. For example:
+
+- `*/15 * * * *` - Run every 15 minutes
+- `0 2 * * *` - Run at 2:00 AM daily
+- `0 0 * * 0` - Run at midnight on Sundays
+
+### Sample Task Configuration
+
+```json
+{
+  "name": "Daily Log Rotation",
+  "description": "Rotate log files daily at midnight",
+  "type": "log_rotation",
+  "enabled": true,
+  "schedule": {
+    "cron_expression": "0 0 * * *",
+    "one_time": false
+  },
+  "parameters": {
+    "log_dir": "/var/log/argus",
+    "pattern": "*.log",
+    "max_size_mb": "10",
+    "keep_count": "7"
+  }
+}
+```
+
+### Creating a Task
+
+To create a new task, send a POST request to `/api/tasks`:
+
+```bash
+curl -X POST http://localhost:8080/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Daily Log Rotation",
+    "description": "Rotate log files daily at midnight",
+    "type": "log_rotation",
+    "enabled": true,
+    "schedule": {
+      "cron_expression": "0 0 * * *"
+    },
+    "parameters": {
+      "log_dir": "/var/log/argus",
+      "pattern": "*.log",
+      "max_size_mb": "10",
+      "keep_count": "7"
+    }
+  }'
+```
+
+### Running a Task Immediately
+
+To run a task immediately regardless of its schedule:
+
+```bash
+curl -X POST http://localhost:8080/api/tasks/task-id-here/run
+```

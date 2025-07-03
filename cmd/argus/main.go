@@ -21,6 +21,8 @@ import (
 	"argus/internal/alerts/notifier"
 	"argus/internal/api"
 	"argus/internal/storage"
+	"argus/internal/tasks"
+	"argus/internal/tasks/repository"
 )
 
 // setupLogger configures structured logging
@@ -289,6 +291,43 @@ func main() {
 	// Create API handlers
 	alertsHandler := api.NewAlertsHandler(alertStore, alertEvaluator, alertNotifier)
 
+	// Initialize task repository and scheduler
+	taskRepo, err := repository.NewFileTaskRepository(".argus/tasks")
+	if err != nil {
+		slog.Error("Failed to initialize task repository", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Task repository initialized successfully")
+
+	taskScheduler := tasks.NewTaskScheduler(taskRepo, nil)
+
+	// Register all task runners
+	runners := []tasks.TaskRunner{}
+	runnerTypes := []tasks.TaskType{
+		tasks.TaskLogRotation,
+		tasks.TaskMetricsAggregation,
+		tasks.TaskHealthCheck,
+		tasks.TaskSystemCleanup,
+	}
+	for _, t := range runnerTypes {
+		runner, err := tasks.NewTaskRunner(t)
+		if err != nil {
+			slog.Error("Failed to create task runner", "type", t, "error", err)
+			continue
+		}
+		taskScheduler.RegisterRunner(runner)
+		runners = append(runners, runner)
+	}
+
+	if err := taskScheduler.Start(); err != nil {
+		slog.Error("Failed to start task scheduler", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Task scheduler started successfully")
+
+	// Create tasks API handler
+	tasksHandler := api.NewTasksHandler(taskRepo, taskScheduler)
+
 	// Serve static files from webapp directory
 	router.Static("/static", "./webapp")
 	router.StaticFile("/", "./webapp/index.html")
@@ -305,6 +344,8 @@ func main() {
 
 		// Register alert API routes
 		alertsHandler.RegisterRoutes(apiGroup)
+		// Register task API routes
+		tasksHandler.RegisterRoutes(apiGroup)
 	}
 
 	// Health check endpoint
@@ -348,6 +389,9 @@ func main() {
 		slog.Error("Server forced to shutdown", "error", err)
 		os.Exit(1)
 	}
+
+	// On shutdown, stop the scheduler
+	taskScheduler.Stop()
 
 	slog.Info("Server shutdown completed successfully")
 }
