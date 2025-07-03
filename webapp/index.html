@@ -15,6 +15,16 @@
 			crossorigin
 			src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
 		></script>
+		<!-- Ensure React is properly loaded -->
+		<script>
+			if (!window.React || !window.ReactDOM) {
+				console.error(
+					"React or ReactDOM not loaded properly!"
+				);
+				document.body.innerHTML =
+					'<div style="color: white; padding: 20px; text-align: center;"><h1>Error Loading React</h1><p>Please check your internet connection and try again.</p></div>';
+			}
+		</script>
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 		<style>
 			* {
@@ -845,8 +855,14 @@
 	</head>
 	<body>
 		<div id="root"></div>
-		<script src="app.js"></script>
-		<script src="alerts.js"></script>
-		<script src="alert-status.js"></script>
+		<!-- Load scripts from static path to ensure they're served correctly -->
+		<!-- Load shared utilities and hooks first -->
+		<script src="/static/shared.js"></script>
+		<!-- Load alert-status.js before alerts.js since alerts.js depends on it -->
+		<script src="/static/alert-status.js"></script>
+		<!-- Load alerts.js before app.js -->
+		<script src="/static/alerts.js"></script>
+		<!-- Load main app last to ensure dependencies are available -->
+		<script src="/static/app.js"></script>
 	</body>
 </html>

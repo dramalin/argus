@@ -1,12 +1,9 @@
 // Alert configuration UI components for Argus System Monitor
-const { useState, useEffect, useRef } = React;
+// React hooks are now globally available from shared.js
+// No need to redeclare them here
 
-// Utility function to format time
-function formatTime(timestamp) {
-	if (!timestamp) return 'N/A';
-	const date = new Date(timestamp);
-	return date.toLocaleString();
-}
+// Use shared utility function for formatting time
+// Using window.Utils.formatTime directly instead of redeclaring
 
 // Alert status badge component
 function AlertStatusBadge({ state }) {
@@ -128,7 +125,7 @@ function AlertList({ onEditAlert, onDeleteAlert, onTestAlert }) {
 						`Current value: ${status.current_value.toFixed(2)}`
 					),
 					status.triggered_at && React.createElement('div', { className: 'alert-triggered' },
-						`Triggered: ${formatTime(status.triggered_at)}`
+						`Triggered: ${window.Utils.formatTime(status.triggered_at)}`
 					)
 				),
 				React.createElement('div', { className: 'alert-actions' },
@@ -781,9 +778,25 @@ function AlertManagement() {
 			case 'notifications':
 				return React.createElement(NotificationList);
 			case 'status':
-				return React.createElement(window.AlertStatusDashboard);
+				// Get AlertStatusDashboard from component registry
+				const AlertStatusDashboard = window.ComponentRegistry.get('AlertStatusDashboard');
+				if (!AlertStatusDashboard) {
+					console.error('AlertStatusDashboard component is not registered');
+					return React.createElement('div', { className: 'error' },
+						'Alert Status Dashboard component not loaded. Please check the console for errors.'
+					);
+				}
+				return React.createElement(AlertStatusDashboard);
 			case 'history':
-				return React.createElement(window.AlertHistoryView);
+				// Get AlertHistoryView from component registry
+				const AlertHistoryView = window.ComponentRegistry.get('AlertHistoryView');
+				if (!AlertHistoryView) {
+					console.error('AlertHistoryView component is not registered');
+					return React.createElement('div', { className: 'error' },
+						'Alert History View component not loaded. Please check the console for errors.'
+					);
+				}
+				return React.createElement(AlertHistoryView);
 			case 'list':
 			default:
 				return React.createElement(React.Fragment, null,
@@ -811,5 +824,22 @@ function AlertManagement() {
 	);
 }
 
-// Export components for use in the main app
-window.AlertManagement = AlertManagement; 
+// Export components using the component registry - do this immediately
+(function registerComponents() {
+	console.log("Registering AlertManagement component...");
+
+	// Register with component registry first
+	if (window.ComponentRegistry) {
+		window.ComponentRegistry.register('AlertManagement', AlertManagement);
+	} else {
+		console.error("ComponentRegistry not found! Waiting 100ms to retry...");
+		setTimeout(registerComponents, 100);
+		return;
+	}
+
+	// Also export to window for backward compatibility
+	window.AlertManagement = AlertManagement;
+
+	// Debug log to verify component export
+	console.log("AlertManagement component exported and registered successfully");
+})();

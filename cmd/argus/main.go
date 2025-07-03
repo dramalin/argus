@@ -332,6 +332,12 @@ func main() {
 	router.Static("/static", "./webapp")
 	router.StaticFile("/", "./webapp/index.html")
 
+	// Serve individual JS files from the webapp directory
+	router.StaticFile("/app.js", "./webapp/app.js")
+	router.StaticFile("/alerts.js", "./webapp/alerts.js")
+	router.StaticFile("/alert-status.js", "./webapp/alert-status.js")
+	router.StaticFile("/shared.js", "./webapp/shared.js")
+
 	slog.Info("Static file serving configured", "webapp_path", "./webapp")
 
 	// API routes

@@ -1,17 +1,70 @@
-const { useState, useEffect, useRef } = React;
+// React hooks are now globally available from shared.js
+// No need to redeclare them here
 
-// Utility functions
-function formatBytes(bytes) {
+// Error boundary component to catch React errors
+class ErrorBoundary extends window.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("React Error:", error, errorInfo);
+    this.setState({ error, errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return React.createElement('div', {
+        style: {
+          margin: '20px',
+          padding: '20px',
+          backgroundColor: '#ffdddd',
+          border: '1px solid #ff0000',
+          borderRadius: '5px',
+          color: '#333'
+        }
+      },
+        React.createElement('h2', null, 'Something went wrong'),
+        React.createElement('p', null, this.state.error && this.state.error.toString()),
+        React.createElement('details', { style: { whiteSpace: 'pre-wrap' } },
+          React.createElement('summary', null, 'Component Stack'),
+          this.state.errorInfo && this.state.errorInfo.componentStack
+        ),
+        React.createElement('button', {
+          onClick: () => window.location.reload(),
+          style: {
+            padding: '8px 16px',
+            marginTop: '15px',
+            backgroundColor: '#667eea',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }
+        }, 'Reload Page')
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Use shared utility functions from shared.js
+const formatBytes = window.Utils ? window.Utils.formatBytes : function (bytes) {
   if (bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+};
 
-function formatNumber(num) {
+const formatNumber = window.Utils ? window.Utils.formatNumber : function (num) {
   return new Intl.NumberFormat().format(num);
-}
+};
 
 // Chart component for CPU usage
 function CPUChart({ data, history }) {
@@ -244,6 +297,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' or 'alerts'
+  const [componentsLoaded, setComponentsLoaded] = useState(false);
+  const [componentLoadingStarted, setComponentLoadingStarted] = useState(false);
 
   // History for charts (keep last 20 data points)
   const [cpuHistory, setCpuHistory] = useState([]);
@@ -325,10 +380,88 @@ function App() {
     );
   };
 
+  // Check for component availability when tab changes
+  useEffect(() => {
+    // This effect is always the same regardless of tab
+    const checkComponentAvailability = () => {
+      if (activeTab === 'alerts' && !componentLoadingStarted) {
+        setComponentLoadingStarted(true);
+
+        const checkForComponent = () => {
+          if (window.ComponentRegistry.get('AlertManagement')) {
+            console.log("AlertManagement component found, updating UI");
+            setComponentsLoaded(true);
+            return true;
+          }
+          return false;
+        };
+
+        // Check immediately first
+        if (!checkForComponent()) {
+          console.log("Waiting for AlertManagement component to register...");
+
+          // Set up a listener for component registration
+          window.ComponentRegistry.onComponentRegistered = (name) => {
+            if (name === 'AlertManagement') {
+              console.log("AlertManagement component registered via event, updating UI");
+              setComponentsLoaded(true);
+            }
+          };
+
+          // Set up a timeout as a fallback
+          const timeout = setTimeout(() => {
+            if (!componentsLoaded) {
+              console.error("Timed out waiting for AlertManagement component");
+              setComponentsLoaded(true); // Force render with error message
+            }
+          }, 2000);
+
+          return () => {
+            clearTimeout(timeout);
+            window.ComponentRegistry.onComponentRegistered = null;
+          };
+        }
+      }
+
+      // Return empty cleanup for consistency
+      return () => { };
+    };
+
+    // Always call the function to ensure consistent hook behavior
+    return checkComponentAvailability();
+  }, [activeTab, componentLoadingStarted, componentsLoaded]);
+
   // Main content based on active tab
   const renderContent = () => {
     if (activeTab === 'alerts') {
-      return React.createElement(window.AlertManagement);
+      // Get AlertManagement from component registry
+      const AlertManagement = window.ComponentRegistry.get('AlertManagement');
+
+      // Log available components to help debug
+      window.ComponentRegistry.listRegistered();
+
+      if (AlertManagement) {
+        try {
+          return React.createElement(AlertManagement);
+        } catch (error) {
+          console.error('Error creating AlertManagement component:', error);
+          return React.createElement('div', { className: 'error' },
+            'Error rendering Alert Management component. Please check the console for details.'
+          );
+        }
+      } else {
+        // Show loading indicator while waiting for component to register
+        if (!componentsLoaded) {
+          return React.createElement('div', { className: 'loading' },
+            'Loading Alert Management components...'
+          );
+        }
+
+        // Fallback if AlertManagement is not available after timeout
+        return React.createElement('div', { className: 'error' },
+          'Alert Management component not loaded. Please try refreshing the page.'
+        );
+      }
     }
 
     // Default dashboard content
@@ -444,4 +577,39 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+// Debug log to verify script execution
+console.log("Initializing Argus System Monitor application...");
+
+// Check if required components are loaded
+document.addEventListener('DOMContentLoaded', () => {
+  console.log("DOM fully loaded, checking components:");
+  console.log("- AlertManagement:", typeof window.AlertManagement);
+  console.log("- AlertStatusDashboard:", typeof window.AlertStatusDashboard);
+  console.log("- AlertHistoryView:", typeof window.AlertHistoryView);
+});
+
+// Check API connectivity
+fetch('/health')
+  .then(response => response.json())
+  .then(data => {
+    console.log("API health check:", data);
+  })
+  .catch(error => {
+    console.error("API health check failed:", error);
+    document.body.innerHTML = '<div style="color: white; padding: 20px; text-align: center;"><h1>API Connection Error</h1><p>Could not connect to the Argus API. Please make sure the server is running.</p></div>';
+  });
+
+// Create app element with error boundary
+const appElement = React.createElement(
+  ErrorBoundary,
+  null,
+  React.createElement(App)
+);
+
+// For React 18
+if (ReactDOM.createRoot) {
+  ReactDOM.createRoot(document.getElementById('root')).render(appElement);
+} else {
+  // Fallback for older React versions
+  ReactDOM.render(appElement, document.getElementById('root'));
+}

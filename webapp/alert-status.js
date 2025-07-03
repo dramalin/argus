@@ -1,12 +1,13 @@
 // Alert status and history display components for Argus System Monitor
-const { useState, useEffect, useRef } = React;
+// React hooks are now globally available from shared.js
+// No need to redeclare them here
 
-// Utility function to format time
-function formatTime(timestamp) {
+// Use shared utility function for formatting time
+const formatTime = window.Utils ? window.Utils.formatTime : function (timestamp) {
 	if (!timestamp) return 'N/A';
 	const date = new Date(timestamp);
 	return date.toLocaleString();
-}
+};
 
 // Utility function to format duration
 function formatDuration(milliseconds) {
@@ -514,7 +515,7 @@ function AlertHistoryView() {
 							React.createElement('td', null,
 								React.createElement('span', {
 									className: `status-badge bg-${entry.status === 'active' || entry.status === 'triggered' ? 'danger' :
-											entry.status === 'acknowledged' ? 'warning' : 'success'}`
+										entry.status === 'acknowledged' ? 'warning' : 'success'}`
 								}, entry.status)
 							),
 							React.createElement('td', { className: 'history-message' }, entry.message)
@@ -525,6 +526,24 @@ function AlertHistoryView() {
 	);
 }
 
-// Export components for use in the main app
-window.AlertStatusDashboard = AlertStatusDashboard;
-window.AlertHistoryView = AlertHistoryView; 
+// Export components using the component registry - do this immediately
+(function registerComponents() {
+	console.log("Registering Alert Status components...");
+
+	// Register with component registry first
+	if (window.ComponentRegistry) {
+		window.ComponentRegistry.register('AlertStatusDashboard', AlertStatusDashboard);
+		window.ComponentRegistry.register('AlertHistoryView', AlertHistoryView);
+	} else {
+		console.error("ComponentRegistry not found! Waiting 100ms to retry...");
+		setTimeout(registerComponents, 100);
+		return;
+	}
+
+	// Also export to window for backward compatibility
+	window.AlertStatusDashboard = AlertStatusDashboard;
+	window.AlertHistoryView = AlertHistoryView;
+
+	// Debug log to verify component exports
+	console.log("Alert status components exported and registered successfully");
+})();
