@@ -1,6 +1,9 @@
 // Package tasks provides functionality for scheduling and managing system maintenance tasks
 package tasks
 
+// All runner and business logic has been migrated to internal/sync/service.go as part of the architecture migration.
+// This file remains as a stub for compatibility and to avoid breaking imports during transition.
+
 import (
 	"context"
 	"errors"
@@ -14,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"argus/internal/models"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
@@ -35,33 +40,33 @@ var (
 // TaskRunner defines the interface for executing tasks
 type TaskRunner interface {
 	// Run executes a task and returns the execution results
-	Run(ctx context.Context, task *TaskConfig) (*TaskExecution, error)
+	Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error)
 
 	// GetType returns the type of task this runner handles
-	GetType() TaskType
+	GetType() models.TaskType
 }
 
 // BaseTaskRunner provides common functionality for task runners
 type BaseTaskRunner struct {
-	taskType TaskType
+	taskType models.TaskType
 }
 
 // GetType returns the type of task this runner handles
-func (r *BaseTaskRunner) GetType() TaskType {
+func (r *BaseTaskRunner) GetType() models.TaskType {
 	return r.taskType
 }
 
 // NewTaskRunner creates a new task runner for the given task type
-func NewTaskRunner(taskType TaskType) (TaskRunner, error) {
+func NewTaskRunner(taskType models.TaskType) (TaskRunner, error) {
 	switch taskType {
-	case TaskLogRotation:
-		return &LogRotationRunner{BaseTaskRunner{taskType: TaskLogRotation}}, nil
-	case TaskMetricsAggregation:
-		return &MetricsAggregationRunner{BaseTaskRunner{taskType: TaskMetricsAggregation}}, nil
-	case TaskHealthCheck:
-		return &HealthCheckRunner{BaseTaskRunner{taskType: TaskHealthCheck}}, nil
-	case TaskSystemCleanup:
-		return &SystemCleanupRunner{BaseTaskRunner{taskType: TaskSystemCleanup}}, nil
+	case models.TaskLogRotation:
+		return &LogRotationRunner{BaseTaskRunner{taskType: models.TaskLogRotation}}, nil
+	case models.TaskMetricsAggregation:
+		return &MetricsAggregationRunner{BaseTaskRunner{taskType: models.TaskMetricsAggregation}}, nil
+	case models.TaskHealthCheck:
+		return &HealthCheckRunner{BaseTaskRunner{taskType: models.TaskHealthCheck}}, nil
+	case models.TaskSystemCleanup:
+		return &SystemCleanupRunner{BaseTaskRunner{taskType: models.TaskSystemCleanup}}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedTaskType, taskType)
 	}
@@ -73,11 +78,11 @@ type LogRotationRunner struct {
 }
 
 // Run executes a log rotation task
-func (r *LogRotationRunner) Run(ctx context.Context, task *TaskConfig) (*TaskExecution, error) {
+func (r *LogRotationRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
 	slog.Info("Starting log rotation task", "task_id", task.ID, "name", task.Name)
 
 	// Create execution record
-	execution := NewTaskExecution(task.ID)
+	execution := models.NewTaskExecution(task.ID)
 	execution.Start()
 
 	// Get parameters with defaults
@@ -174,11 +179,11 @@ type MetricsAggregationRunner struct {
 }
 
 // Run executes a metrics aggregation task
-func (r *MetricsAggregationRunner) Run(ctx context.Context, task *TaskConfig) (*TaskExecution, error) {
+func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
 	slog.Info("Starting metrics aggregation task", "task_id", task.ID, "name", task.Name)
 
 	// Create execution record
-	execution := NewTaskExecution(task.ID)
+	execution := models.NewTaskExecution(task.ID)
 	execution.Start()
 
 	// Get parameters with defaults
@@ -276,11 +281,11 @@ type HealthCheckRunner struct {
 }
 
 // Run executes a health check task
-func (r *HealthCheckRunner) Run(ctx context.Context, task *TaskConfig) (*TaskExecution, error) {
+func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
 	slog.Info("Starting health check task", "task_id", task.ID, "name", task.Name)
 
 	// Create execution record
-	execution := NewTaskExecution(task.ID)
+	execution := models.NewTaskExecution(task.ID)
 	execution.Start()
 
 	// Get parameters with defaults
@@ -377,11 +382,11 @@ type SystemCleanupRunner struct {
 }
 
 // Run executes a system cleanup task
-func (r *SystemCleanupRunner) Run(ctx context.Context, task *TaskConfig) (*TaskExecution, error) {
+func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
 	slog.Info("Starting system cleanup task", "task_id", task.ID, "name", task.Name)
 
 	// Create execution record
-	execution := NewTaskExecution(task.ID)
+	execution := models.NewTaskExecution(task.ID)
 	execution.Start()
 
 	// Get parameters with defaults
@@ -491,7 +496,7 @@ func (r *SystemCleanupRunner) Run(ctx context.Context, task *TaskConfig) (*TaskE
 // Helper functions for task runners
 
 // getTaskParameter gets a parameter from the task config with a default value
-func getTaskParameter(task *TaskConfig, key, defaultValue string) string {
+func getTaskParameter(task *models.TaskConfig, key, defaultValue string) string {
 	if task.Parameters == nil {
 		return defaultValue
 	}
@@ -504,7 +509,7 @@ func getTaskParameter(task *TaskConfig, key, defaultValue string) string {
 }
 
 // getTaskParameterInt gets an integer parameter from the task config with a default value
-func getTaskParameterInt(task *TaskConfig, key string, defaultValue int) (int, error) {
+func getTaskParameterInt(task *models.TaskConfig, key string, defaultValue int) (int, error) {
 	if task.Parameters == nil {
 		return defaultValue, nil
 	}
@@ -521,7 +526,7 @@ func getTaskParameterInt(task *TaskConfig, key string, defaultValue int) (int, e
 }
 
 // getTaskParameterBool gets a boolean parameter from the task config with a default value
-func getTaskParameterBool(task *TaskConfig, key string, defaultValue bool) bool {
+func getTaskParameterBool(task *models.TaskConfig, key string, defaultValue bool) bool {
 	if task.Parameters == nil {
 		return defaultValue
 	}

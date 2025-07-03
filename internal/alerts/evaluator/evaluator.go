@@ -13,8 +13,8 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
 
-	"argus/internal/alerts"
-	"argus/internal/storage"
+	"argus/internal/database"
+	"argus/internal/models"
 )
 
 // Default configuration values
@@ -28,19 +28,6 @@ const (
 	// DefaultAlertResolveCount is the default number of consecutive evaluations before resolving an alert
 	DefaultAlertResolveCount = 2
 )
-
-// AlertEvent represents an alert state change event
-type AlertEvent struct {
-	AlertID      string              // ID of the alert that changed state
-	OldState     alerts.AlertState   // Previous state
-	NewState     alerts.AlertState   // New state
-	CurrentValue float64             // Current metric value
-	Threshold    float64             // Alert threshold value
-	Timestamp    time.Time           // When the state change occurred
-	Message      string              // Human-readable message
-	Alert        *alerts.AlertConfig // The full alert configuration
-	Status       *alerts.AlertStatus // The current alert status
-}
 
 // Config holds the configuration for the evaluator
 type Config struct {
@@ -61,10 +48,10 @@ func DefaultConfig() *Config {
 // Evaluator is responsible for evaluating alert conditions
 type Evaluator struct {
 	config      *Config
-	alertStore  *storage.AlertStore
-	alertStatus map[string]*alerts.AlertStatus
+	alertStore  *database.AlertStore
+	alertStatus map[string]*models.AlertStatus
 	statusMu    sync.RWMutex
-	eventCh     chan AlertEvent
+	eventCh     chan models.AlertEvent
 	wg          sync.WaitGroup
 	metrics     *metricCollector
 }
@@ -75,7 +62,7 @@ type metricCollector struct {
 }
 
 // NewEvaluator creates a new alert evaluator
-func NewEvaluator(alertStore *storage.AlertStore, config *Config) *Evaluator {
+func NewEvaluator(alertStore *database.AlertStore, config *Config) *Evaluator {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -83,8 +70,8 @@ func NewEvaluator(alertStore *storage.AlertStore, config *Config) *Evaluator {
 	return &Evaluator{
 		config:      config,
 		alertStore:  alertStore,
-		alertStatus: make(map[string]*alerts.AlertStatus),
-		eventCh:     make(chan AlertEvent, 100), // Buffer for 100 events
+		alertStatus: make(map[string]*models.AlertStatus),
+		eventCh:     make(chan models.AlertEvent, 100), // Buffer for 100 events
 		metrics: &metricCollector{
 			cpuSampleInterval: 1 * time.Second, // 1 second sample for CPU
 		},
@@ -118,12 +105,12 @@ func (e *Evaluator) Stop() {
 }
 
 // Events returns the channel for alert events
-func (e *Evaluator) Events() <-chan AlertEvent {
+func (e *Evaluator) Events() <-chan models.AlertEvent {
 	return e.eventCh
 }
 
 // GetAlertStatus returns the current status of an alert
-func (e *Evaluator) GetAlertStatus(alertID string) (*alerts.AlertStatus, bool) {
+func (e *Evaluator) GetAlertStatus(alertID string) (*models.AlertStatus, bool) {
 	e.statusMu.RLock()
 	defer e.statusMu.RUnlock()
 
@@ -132,12 +119,12 @@ func (e *Evaluator) GetAlertStatus(alertID string) (*alerts.AlertStatus, bool) {
 }
 
 // GetAllAlertStatus returns the current status of all alerts
-func (e *Evaluator) GetAllAlertStatus() map[string]*alerts.AlertStatus {
+func (e *Evaluator) GetAllAlertStatus() map[string]*models.AlertStatus {
 	e.statusMu.RLock()
 	defer e.statusMu.RUnlock()
 
 	// Create a copy to avoid concurrent map access
-	statusCopy := make(map[string]*alerts.AlertStatus, len(e.alertStatus))
+	statusCopy := make(map[string]*models.AlertStatus, len(e.alertStatus))
 	for id, status := range e.alertStatus {
 		statusCopy[id] = status
 	}
@@ -157,9 +144,9 @@ func (e *Evaluator) initAlertStatus() error {
 
 	for _, config := range alertConfigs {
 		if config.Enabled {
-			e.alertStatus[config.ID] = &alerts.AlertStatus{
+			e.alertStatus[config.ID] = &models.AlertStatus{
 				AlertID: config.ID,
-				State:   alerts.StateInactive,
+				State:   models.StateInactive,
 				Message: fmt.Sprintf("Alert %s initialized", config.Name),
 			}
 		}
@@ -214,9 +201,9 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 				status, exists := e.alertStatus[config.ID]
 				if !exists {
 					// Initialize status if it doesn't exist
-					status = &alerts.AlertStatus{
+					status = &models.AlertStatus{
 						AlertID: config.ID,
-						State:   alerts.StateInactive,
+						State:   models.StateInactive,
 					}
 					e.alertStatus[config.ID] = status
 				}
@@ -226,14 +213,14 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 
 				// Handle state transitions with debouncing
 				switch status.State {
-				case alerts.StateInactive:
+				case models.StateInactive:
 					if exceeded {
 						// Potential transition to pending
 						pendingCounters[config.ID]++
 						if pendingCounters[config.ID] >= 1 {
 							// Transition to pending on first detection
 							oldState := status.State
-							status.State = alerts.StatePending
+							status.State = models.StatePending
 							delete(pendingCounters, config.ID)
 
 							slog.Info("Alert state changed to pending",
@@ -250,11 +237,11 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 						delete(pendingCounters, config.ID)
 					}
 
-				case alerts.StatePending:
+				case models.StatePending:
 					if !exceeded {
 						// Condition no longer met, go back to inactive
 						oldState := status.State
-						status.State = alerts.StateInactive
+						status.State = models.StateInactive
 						status.Message = fmt.Sprintf("Alert condition no longer met: %v %s %v",
 							currentValue, config.Threshold.Operator, config.Threshold.Value)
 
@@ -279,7 +266,7 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 							durationElapsed := time.Since(*status.TriggeredAt) >= config.Threshold.Duration
 							if durationElapsed {
 								oldState := status.State
-								status.State = alerts.StateActive
+								status.State = models.StateActive
 								status.Message = fmt.Sprintf("Alert triggered: %v %s %v for %v",
 									currentValue, config.Threshold.Operator, config.Threshold.Value, config.Threshold.Duration)
 
@@ -299,7 +286,7 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 							if pendingCounters[config.ID] >= config.Threshold.SustainedFor {
 								oldState := status.State
 								now := time.Now()
-								status.State = alerts.StateActive
+								status.State = models.StateActive
 								status.TriggeredAt = &now
 								status.Message = fmt.Sprintf("Alert triggered: %v %s %v for %d checks",
 									currentValue, config.Threshold.Operator, config.Threshold.Value, config.Threshold.SustainedFor)
@@ -319,7 +306,7 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 							// No duration or sustained_for specified, activate immediately
 							oldState := status.State
 							now := time.Now()
-							status.State = alerts.StateActive
+							status.State = models.StateActive
 							status.TriggeredAt = &now
 							status.Message = fmt.Sprintf("Alert triggered: %v %s %v",
 								currentValue, config.Threshold.Operator, config.Threshold.Value)
@@ -336,14 +323,14 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 						}
 					}
 
-				case alerts.StateActive:
+				case models.StateActive:
 					if !exceeded {
 						// Potential resolution
 						resolveCounters[config.ID]++
 						if resolveCounters[config.ID] >= e.config.AlertResolveCount {
 							oldState := status.State
 							now := time.Now()
-							status.State = alerts.StateInactive
+							status.State = models.StateInactive
 							status.ResolvedAt = &now
 							status.TriggeredAt = nil
 							status.Message = fmt.Sprintf("Alert resolved: %v %s %v",
@@ -372,8 +359,8 @@ func (e *Evaluator) evaluationLoop(ctx context.Context) {
 }
 
 // generateEvent creates and sends an alert event
-func (e *Evaluator) generateEvent(oldState, newState alerts.AlertState, currentValue float64, config *alerts.AlertConfig, status *alerts.AlertStatus) {
-	event := AlertEvent{
+func (e *Evaluator) generateEvent(oldState, newState models.AlertState, currentValue float64, config *models.AlertConfig, status *models.AlertStatus) {
+	event := models.AlertEvent{
 		AlertID:      config.ID,
 		OldState:     oldState,
 		NewState:     newState,
@@ -399,15 +386,15 @@ func (e *Evaluator) generateEvent(oldState, newState alerts.AlertState, currentV
 }
 
 // evaluateMetric gets the current value for the specified metric
-func (e *Evaluator) evaluateMetric(threshold alerts.ThresholdConfig) (float64, error) {
+func (e *Evaluator) evaluateMetric(threshold models.ThresholdConfig) (float64, error) {
 	switch threshold.MetricType {
-	case alerts.MetricCPU:
+	case models.MetricCPU:
 		return e.evaluateCPUMetric(threshold.MetricName)
-	case alerts.MetricMemory:
+	case models.MetricMemory:
 		return e.evaluateMemoryMetric(threshold.MetricName)
-	case alerts.MetricLoad:
+	case models.MetricLoad:
 		return e.evaluateLoadMetric(threshold.MetricName)
-	case alerts.MetricNetwork:
+	case models.MetricNetwork:
 		return e.evaluateNetworkMetric(threshold.MetricName)
 	default:
 		return 0, fmt.Errorf("unsupported metric type: %s", threshold.MetricType)
@@ -509,19 +496,19 @@ func (e *Evaluator) evaluateNetworkMetric(metricName string) (float64, error) {
 }
 
 // compareValue compares the current value against the threshold using the specified operator
-func (e *Evaluator) compareValue(current, threshold float64, operator alerts.ComparisonOperator) bool {
+func (e *Evaluator) compareValue(current, threshold float64, operator models.ComparisonOperator) bool {
 	switch operator {
-	case alerts.OperatorGreaterThan:
+	case models.OperatorGreaterThan:
 		return current > threshold
-	case alerts.OperatorGreaterThanOrEqual:
+	case models.OperatorGreaterThanOrEqual:
 		return current >= threshold
-	case alerts.OperatorLessThan:
+	case models.OperatorLessThan:
 		return current < threshold
-	case alerts.OperatorLessThanOrEqual:
+	case models.OperatorLessThanOrEqual:
 		return current <= threshold
-	case alerts.OperatorEqual:
+	case models.OperatorEqual:
 		return current == threshold
-	case alerts.OperatorNotEqual:
+	case models.OperatorNotEqual:
 		return current != threshold
 	default:
 		slog.Error("Unknown comparison operator", "operator", operator)

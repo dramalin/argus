@@ -11,18 +11,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"argus/internal/models"
 	"argus/internal/tasks"
-	"argus/internal/tasks/repository"
 )
 
 // TasksHandler manages task-related API endpoints
 type TasksHandler struct {
-	repo      repository.TaskRepository
+	repo      models.TaskRepository
 	scheduler *tasks.TaskScheduler
 }
 
 // NewTasksHandler creates a new tasks API handler
-func NewTasksHandler(repo repository.TaskRepository, scheduler *tasks.TaskScheduler) *TasksHandler {
+func NewTasksHandler(repo models.TaskRepository, scheduler *tasks.TaskScheduler) *TasksHandler {
 	return &TasksHandler{
 		repo:      repo,
 		scheduler: scheduler,
@@ -76,7 +76,7 @@ func (h *TasksHandler) GetTask(c *gin.Context) {
 
 // CreateTask creates a new task configuration
 func (h *TasksHandler) CreateTask(c *gin.Context) {
-	var task tasks.TaskConfig
+	var task models.TaskConfig
 	if err := c.ShouldBindJSON(&task); err != nil {
 		slog.Debug("Invalid task configuration data", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task configuration: " + err.Error()})
@@ -125,7 +125,7 @@ func (h *TasksHandler) UpdateTask(c *gin.Context) {
 	}
 
 	// Parse update data
-	var task tasks.TaskConfig
+	var task models.TaskConfig
 	if err := c.ShouldBindJSON(&task); err != nil {
 		slog.Debug("Invalid task update data", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task configuration: " + err.Error()})

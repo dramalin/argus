@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"argus/internal/alerts"
 	"argus/internal/alerts/evaluator"
 	"argus/internal/alerts/notifier"
+	"argus/internal/models"
 	"argus/internal/storage"
 )
 
@@ -61,22 +61,22 @@ func setupTestEnvironment(t *testing.T) (*gin.Engine, *AlertsHandler, *storage.A
 	return router, handler, alertStore, cleanup
 }
 
-func createTestAlert(t *testing.T, alertStore *storage.AlertStore) *alerts.AlertConfig {
-	alert := &alerts.AlertConfig{
+func createTestAlert(t *testing.T, alertStore *storage.AlertStore) *models.AlertConfig {
+	alert := &models.AlertConfig{
 		ID:          uuid.New().String(),
 		Name:        "Test Alert",
 		Description: "Test alert for CPU usage",
 		Enabled:     true,
-		Severity:    alerts.SeverityWarning,
-		Threshold: alerts.ThresholdConfig{
-			MetricType: alerts.MetricCPU,
+		Severity:    models.SeverityWarning,
+		Threshold: models.ThresholdConfig{
+			MetricType: models.MetricCPU,
 			MetricName: "usage_percent",
-			Operator:   alerts.OperatorGreaterThan,
+			Operator:   models.OperatorGreaterThan,
 			Value:      80.0,
 		},
-		Notifications: []alerts.NotificationConfig{
+		Notifications: []models.NotificationConfig{
 			{
-				Type:    alerts.NotificationInApp,
+				Type:    models.NotificationInApp,
 				Enabled: true,
 			},
 		},
@@ -106,7 +106,7 @@ func TestListAlerts(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response []*alerts.AlertConfig
+	var response []*models.AlertConfig
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -145,7 +145,7 @@ func TestGetAlert(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response alerts.AlertConfig
+	var response models.AlertConfig
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -172,20 +172,20 @@ func TestCreateAlert(t *testing.T) {
 	defer cleanup()
 
 	// Create alert payload
-	alert := alerts.AlertConfig{
+	alert := models.AlertConfig{
 		Name:        "New Test Alert",
 		Description: "Test alert for memory usage",
 		Enabled:     true,
-		Severity:    alerts.SeverityWarning,
-		Threshold: alerts.ThresholdConfig{
-			MetricType: alerts.MetricMemory,
+		Severity:    models.SeverityWarning,
+		Threshold: models.ThresholdConfig{
+			MetricType: models.MetricMemory,
 			MetricName: "used_percent",
-			Operator:   alerts.OperatorGreaterThan,
+			Operator:   models.OperatorGreaterThan,
 			Value:      90.0,
 		},
-		Notifications: []alerts.NotificationConfig{
+		Notifications: []models.NotificationConfig{
 			{
-				Type:    alerts.NotificationInApp,
+				Type:    models.NotificationInApp,
 				Enabled: true,
 			},
 		},
@@ -203,7 +203,7 @@ func TestCreateAlert(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusCreated, w.Code)
 
-	var response alerts.AlertConfig
+	var response models.AlertConfig
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -221,7 +221,7 @@ func TestCreateAlert_InvalidPayload(t *testing.T) {
 	defer cleanup()
 
 	// Create invalid alert payload (missing required fields)
-	alert := alerts.AlertConfig{
+	alert := models.AlertConfig{
 		Name: "Invalid Alert",
 		// Missing severity and threshold
 	}
@@ -263,7 +263,7 @@ func TestUpdateAlert(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response alerts.AlertConfig
+	var response models.AlertConfig
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -279,14 +279,14 @@ func TestUpdateAlert_NotFound(t *testing.T) {
 	defer cleanup()
 
 	// Create update payload
-	alert := alerts.AlertConfig{
+	alert := models.AlertConfig{
 		Name:        "Updated Alert",
 		Description: "This alert doesn't exist",
-		Severity:    alerts.SeverityWarning,
-		Threshold: alerts.ThresholdConfig{
-			MetricType: alerts.MetricCPU,
+		Severity:    models.SeverityWarning,
+		Threshold: models.ThresholdConfig{
+			MetricType: models.MetricCPU,
 			MetricName: "usage_percent",
-			Operator:   alerts.OperatorGreaterThan,
+			Operator:   models.OperatorGreaterThan,
 			Value:      85.0,
 		},
 	}
@@ -346,18 +346,18 @@ func TestGetNotifications(t *testing.T) {
 
 	// Create a test event
 	now := time.Now()
-	testEvent := evaluator.AlertEvent{
+	testEvent := models.AlertEvent{
 		AlertID:      alert.ID,
-		OldState:     alerts.StateInactive,
-		NewState:     alerts.StateActive,
+		OldState:     models.StateInactive,
+		NewState:     models.StateActive,
 		CurrentValue: 85.0,
 		Threshold:    alert.Threshold.Value,
 		Timestamp:    now,
 		Message:      "Test alert notification",
 		Alert:        alert,
-		Status: &alerts.AlertStatus{
+		Status: &models.AlertStatus{
 			AlertID:      alert.ID,
-			State:        alerts.StateActive,
+			State:        models.StateActive,
 			CurrentValue: 85.0,
 			TriggeredAt:  &now,
 			Message:      "Test alert triggered",
@@ -375,7 +375,7 @@ func TestGetNotifications(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response []notifier.InAppNotification
+	var response []models.InAppNotification
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -383,7 +383,7 @@ func TestGetNotifications(t *testing.T) {
 	assert.Len(t, response, 1)
 	assert.Equal(t, alert.ID, response[0].AlertID)
 	assert.Equal(t, alert.Name, response[0].AlertName)
-	assert.Equal(t, alerts.StateActive, response[0].State)
+	assert.Equal(t, models.StateActive, response[0].State)
 	assert.False(t, response[0].Read)
 }
 
@@ -396,18 +396,18 @@ func TestMarkNotificationRead(t *testing.T) {
 
 	// Create a test event
 	now := time.Now()
-	testEvent := evaluator.AlertEvent{
+	testEvent := models.AlertEvent{
 		AlertID:      alert.ID,
-		OldState:     alerts.StateInactive,
-		NewState:     alerts.StateActive,
+		OldState:     models.StateInactive,
+		NewState:     models.StateActive,
 		CurrentValue: 85.0,
 		Threshold:    alert.Threshold.Value,
 		Timestamp:    now,
 		Message:      "Test alert notification",
 		Alert:        alert,
-		Status: &alerts.AlertStatus{
+		Status: &models.AlertStatus{
 			AlertID:      alert.ID,
-			State:        alerts.StateActive,
+			State:        models.StateActive,
 			CurrentValue: 85.0,
 			TriggeredAt:  &now,
 			Message:      "Test alert triggered",
@@ -418,7 +418,7 @@ func TestMarkNotificationRead(t *testing.T) {
 	handler.notifier.ProcessEvent(testEvent)
 
 	// Get the notification ID
-	channel, _ := handler.notifier.GetChannel(alerts.NotificationInApp)
+	channel, _ := handler.notifier.GetChannel(models.NotificationInApp)
 	inAppChannel := channel.(*notifier.InAppChannel)
 	notifications := inAppChannel.GetNotifications()
 	require.Len(t, notifications, 1)

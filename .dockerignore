@@ -1,0 +1,44 @@
+# .dockerignore for Argus System Monitor
+# Exclude build artifacts, dependencies, and local config
+
+# Go build
+bin/
+*.exe
+*.test
+*.out
+
+# Node modules
+node_modules/
+web/argus-react/node_modules/
+
+# Build outputs
+web/argus-react/dist/
+web/argus-react/build/
+web/static/
+
+# Logs
+*.log
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+Dockerfile*
+
+# Config
+config.yaml
+.env
+.env.*
+tokens.json
+
+# Git
+.git
+.gitignore 

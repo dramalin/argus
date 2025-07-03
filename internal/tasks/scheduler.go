@@ -1,6 +1,9 @@
 // Package tasks provides functionality for scheduling and managing system maintenance tasks
 package tasks
 
+// All scheduling and business logic has been migrated to internal/sync/service.go as part of the architecture migration.
+// This file remains as a stub for compatibility and to avoid breaking imports during transition.
+
 import (
 	"context"
 	"fmt"

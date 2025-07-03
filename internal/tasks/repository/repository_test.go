@@ -1,3 +1,4 @@
+// Package repository provides task persistence functionality
 package repository
 
 import (
@@ -10,31 +11,31 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"argus/internal/tasks"
+	"argus/internal/database"
 )
 
 // setupTestTaskRepo creates a temporary directory and returns a new FileTaskRepository for testing
-func setupTestTaskRepo(t *testing.T) (*FileTaskRepository, string) {
+func setupTestTaskRepo(t *testing.T) (*database.FileTaskRepository, string) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "task_repo_test")
 	require.NoError(t, err)
 
 	// Create a new file task repository
-	repo, err := NewFileTaskRepository(tempDir)
+	repo, err := database.NewFileTaskRepository(tempDir)
 	require.NoError(t, err)
 
 	return repo, tempDir
 }
 
 // createTestTask creates a test task configuration
-func createTestTask(id string, taskType tasks.TaskType) *tasks.TaskConfig {
-	return &tasks.TaskConfig{
+func createTestTask(id string, taskType database.TaskType) *database.TaskConfig {
+	return &database.TaskConfig{
 		ID:          id,
 		Name:        "Test Task",
 		Description: "Test task for repository",
 		Type:        taskType,
 		Enabled:     true,
-		Schedule: tasks.Schedule{
+		Schedule: database.Schedule{
 			CronExpression: "*/5 * * * *",
 			NextRunTime:    time.Now().Add(5 * time.Minute),
 		},
@@ -48,9 +49,9 @@ func createTestTask(id string, taskType tasks.TaskType) *tasks.TaskConfig {
 }
 
 // createTestExecution creates a test task execution record
-func createTestExecution(taskID string, status tasks.TaskStatus) *tasks.TaskExecution {
-	return &tasks.TaskExecution{
-		ID:        tasks.GenerateID(),
+func createTestExecution(taskID string, status database.TaskStatus) *database.TaskExecution {
+	return &database.TaskExecution{
+		ID:        database.GenerateID(),
 		TaskID:    taskID,
 		Status:    status,
 		StartTime: time.Now().Add(-1 * time.Minute),
@@ -66,13 +67,13 @@ func TestNewFileTaskRepository(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Test creating a repository
-	repo, err := NewFileTaskRepository(tempDir)
+	repo, err := database.NewFileTaskRepository(tempDir)
 	assert.NoError(t, err)
 	assert.NotNil(t, repo)
 
 	// Verify directories were created
-	tasksDir := filepath.Join(tempDir, TasksDir)
-	executionsDir := filepath.Join(tempDir, ExecutionsDir)
+	tasksDir := filepath.Join(tempDir, database.TasksDir)
+	executionsDir := filepath.Join(tempDir, database.ExecutionsDir)
 
 	_, err = os.Stat(tasksDir)
 	assert.NoError(t, err)
@@ -81,7 +82,7 @@ func TestNewFileTaskRepository(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test with invalid path
-	_, err = NewFileTaskRepository("/nonexistent/path")
+	_, err = database.NewFileTaskRepository("/nonexistent/path")
 	assert.Error(t, err)
 }
 
@@ -91,14 +92,14 @@ func TestFileTaskRepository_CreateTask(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-1", tasks.TaskLogRotation)
+	task := createTestTask("test-task-1", database.TaskLogRotation)
 
 	// Test creation
 	err := repo.CreateTask(context.Background(), task)
 	assert.NoError(t, err)
 
 	// Verify the file was created
-	taskPath := filepath.Join(tempDir, TasksDir, task.ID+".json")
+	taskPath := filepath.Join(tempDir, database.TasksDir, task.ID+".json")
 	_, err = os.Stat(taskPath)
 	assert.NoError(t, err)
 
@@ -113,7 +114,7 @@ func TestFileTaskRepository_GetTask(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-2", tasks.TaskHealthCheck)
+	task := createTestTask("test-task-2", database.TaskHealthCheck)
 	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
@@ -127,7 +128,7 @@ func TestFileTaskRepository_GetTask(t *testing.T) {
 	// Test getting a non-existent task
 	_, err = repo.GetTask(context.Background(), "non-existent")
 	assert.Error(t, err)
-	assert.Equal(t, ErrTaskNotFound, err)
+	assert.Equal(t, database.ErrTaskNotFound, err)
 }
 
 func TestFileTaskRepository_UpdateTask(t *testing.T) {
@@ -136,7 +137,7 @@ func TestFileTaskRepository_UpdateTask(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-3", tasks.TaskMetricsAggregation)
+	task := createTestTask("test-task-3", database.TaskMetricsAggregation)
 	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
@@ -155,7 +156,7 @@ func TestFileTaskRepository_UpdateTask(t *testing.T) {
 	assert.Equal(t, "new_value", retrieved.Parameters["new_param"])
 
 	// Test updating a non-existent task
-	nonExistentTask := createTestTask("non-existent", tasks.TaskSystemCleanup)
+	nonExistentTask := createTestTask("non-existent", database.TaskSystemCleanup)
 	err = repo.UpdateTask(context.Background(), nonExistentTask)
 	assert.Error(t, err)
 }
@@ -166,7 +167,7 @@ func TestFileTaskRepository_DeleteTask(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-4", tasks.TaskSystemCleanup)
+	task := createTestTask("test-task-4", database.TaskSystemCleanup)
 	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
@@ -175,7 +176,7 @@ func TestFileTaskRepository_DeleteTask(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify the file was deleted
-	taskPath := filepath.Join(tempDir, TasksDir, task.ID+".json")
+	taskPath := filepath.Join(tempDir, database.TasksDir, task.ID+".json")
 	_, err = os.Stat(taskPath)
 	assert.True(t, os.IsNotExist(err))
 
@@ -190,11 +191,11 @@ func TestFileTaskRepository_ListTasks(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create multiple test tasks
-	task1 := createTestTask("test-task-5", tasks.TaskLogRotation)
+	task1 := createTestTask("test-task-5", database.TaskLogRotation)
 	err := repo.CreateTask(context.Background(), task1)
 	require.NoError(t, err)
 
-	task2 := createTestTask("test-task-6", tasks.TaskHealthCheck)
+	task2 := createTestTask("test-task-6", database.TaskHealthCheck)
 	err = repo.CreateTask(context.Background(), task2)
 	require.NoError(t, err)
 
@@ -215,24 +216,24 @@ func TestFileTaskRepository_GetTasksByType(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create tasks of different types
-	logTask1 := createTestTask("log-task-1", tasks.TaskLogRotation)
+	logTask1 := createTestTask("log-task-1", database.TaskLogRotation)
 	err := repo.CreateTask(context.Background(), logTask1)
 	require.NoError(t, err)
 
-	logTask2 := createTestTask("log-task-2", tasks.TaskLogRotation)
+	logTask2 := createTestTask("log-task-2", database.TaskLogRotation)
 	err = repo.CreateTask(context.Background(), logTask2)
 	require.NoError(t, err)
 
-	healthTask := createTestTask("health-task", tasks.TaskHealthCheck)
+	healthTask := createTestTask("health-task", database.TaskHealthCheck)
 	err = repo.CreateTask(context.Background(), healthTask)
 	require.NoError(t, err)
 
 	// Test getting tasks by type
-	logTasks, err := repo.GetTasksByType(context.Background(), tasks.TaskLogRotation)
+	logTasks, err := repo.GetTasksByType(context.Background(), database.TaskLogRotation)
 	assert.NoError(t, err)
 	assert.Len(t, logTasks, 2)
 
-	healthTasks, err := repo.GetTasksByType(context.Background(), tasks.TaskHealthCheck)
+	healthTasks, err := repo.GetTasksByType(context.Background(), database.TaskHealthCheck)
 	assert.NoError(t, err)
 	assert.Len(t, healthTasks, 1)
 	assert.Equal(t, healthTask.ID, healthTasks[0].ID)
@@ -249,19 +250,19 @@ func TestFileTaskRepository_RecordExecution(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-7", tasks.TaskLogRotation)
+	task := createTestTask("test-task-7", database.TaskLogRotation)
 	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create a test execution
-	execution := createTestExecution(task.ID, tasks.StatusCompleted)
+	execution := createTestExecution(task.ID, database.StatusCompleted)
 
 	// Test recording execution
 	err = repo.RecordExecution(context.Background(), execution)
 	assert.NoError(t, err)
 
 	// Verify the execution file was created
-	execPath := filepath.Join(tempDir, ExecutionsDir, execution.ID+".json")
+	execPath := filepath.Join(tempDir, database.ExecutionsDir, execution.ID+".json")
 	_, err = os.Stat(execPath)
 	assert.NoError(t, err)
 }
@@ -272,16 +273,16 @@ func TestFileTaskRepository_GetExecutions(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-8", tasks.TaskLogRotation)
+	task := createTestTask("test-task-8", database.TaskLogRotation)
 	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create test executions
-	exec1 := createTestExecution(task.ID, tasks.StatusCompleted)
+	exec1 := createTestExecution(task.ID, database.StatusCompleted)
 	exec1.ID = "exec-1"
 	exec1.StartTime = time.Now().Add(-2 * time.Minute)
 
-	exec2 := createTestExecution(task.ID, tasks.StatusCompleted)
+	exec2 := createTestExecution(task.ID, database.StatusCompleted)
 	exec2.ID = "exec-2"
 	exec2.StartTime = time.Now().Add(-1 * time.Minute)
 
@@ -312,12 +313,12 @@ func TestFileTaskRepository_GetExecution(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test task
-	task := createTestTask("test-task-9", tasks.TaskLogRotation)
+	task := createTestTask("test-task-9", database.TaskLogRotation)
 	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create a test execution
-	execution := createTestExecution(task.ID, tasks.StatusCompleted)
+	execution := createTestExecution(task.ID, database.StatusCompleted)
 	execution.ID = "exec-3"
 
 	// Record execution
@@ -334,5 +335,5 @@ func TestFileTaskRepository_GetExecution(t *testing.T) {
 	// Test getting non-existent execution
 	_, err = repo.GetExecution(context.Background(), "non-existent")
 	assert.Error(t, err)
-	assert.Equal(t, ErrExecutionNotFound, err)
+	assert.Equal(t, database.ErrExecutionNotFound, err)
 }

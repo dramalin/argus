@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+        argus:
+                build: .
+                container_name: argus-monitor
+                ports:
+                        - "8080:8080"
+                environment:
+                        - CONFIG_FILE=/home/argus/config.yaml
+                        - LOG_LEVEL=info
+                volumes:
+                        # Mount config file
+                        - ./config.yaml:/home/argus/config.yaml:ro
+                        # Mount data directory for persistence
+                        - argus_data:/home/argus/.argus
+                        # Mount built static assets for development (optional)
+                        - ./web/argus-react/dist:/home/argus/web/static:ro
+                restart: unless-stopped
+                healthcheck:
+                        test:
+                                [
+                                        "CMD",
+                                        "wget",
+                                        "--no-verbose",
+                                        "--tries=1",
+                                        "--spider",
+                                        "http://localhost:8080/health",
+                                ]
+                        interval: 30s
+                        timeout: 10s
+                        retries: 3
+                        start_period: 40s
+                networks:
+                        - argus-network
+
+        # Development frontend service (React Vite dev server)
+        argus-frontend-dev:
+                image: node:18-alpine
+                container_name: argus-frontend-dev
+                working_dir: /app
+                command: sh -c "npm install && npm run dev"
+                ports:
+                        - "5173:5173"
+                volumes:
+                        - ./web/argus-react:/app
+                environment:
+                        - VITE_API_URL=http://localhost:8080
+                profiles:
+                        - development
+                networks:
+                        - argus-network
+
+volumes:
+        argus_data:
+                driver: local
+
+networks:
+        argus-network:
+                driver: bridge

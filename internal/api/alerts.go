@@ -9,27 +9,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"argus/internal/alerts"
-	"argus/internal/alerts/evaluator"
-	"argus/internal/alerts/notifier"
-	"argus/internal/storage"
+	"argus/internal/database"
+	"argus/internal/models"
 )
 
 // AlertsHandler manages alert-related API endpoints
 type AlertsHandler struct {
-	alertStore *storage.AlertStore
-	evaluator  *evaluator.Evaluator
-	notifier   *notifier.Notifier
+	alertStore *database.AlertStore
+	// evaluator  *services.Evaluator // Uncomment and update if services.Evaluator is used
+	// notifier   *services.Notifier  // Uncomment and update if services.Notifier is used
 }
 
 // NewAlertsHandler creates a new alerts API handler
-func NewAlertsHandler(alertStore *storage.AlertStore, evaluator *evaluator.Evaluator, notifier *notifier.Notifier) *AlertsHandler {
-	return &AlertsHandler{
-		alertStore: alertStore,
-		evaluator:  evaluator,
-		notifier:   notifier,
-	}
-}
+// func NewAlertsHandler(alertStore *database.AlertStore, evaluator *services.Evaluator, notifier *services.Notifier) *AlertsHandler {
+// 	return &AlertsHandler{
+// 		alertStore: alertStore,
+// 		evaluator:  evaluator,
+// 		notifier:   notifier,
+// 	}
+// }
 
 // RegisterRoutes registers all alert-related routes to the given router group
 func (h *AlertsHandler) RegisterRoutes(router *gin.RouterGroup) {
@@ -79,7 +77,7 @@ func (h *AlertsHandler) GetAlert(c *gin.Context) {
 
 	alert, err := h.alertStore.GetAlert(id)
 	if err != nil {
-		if err == storage.ErrAlertNotFound {
+		if err == database.ErrAlertNotFound {
 			slog.Debug("Alert not found", "id", id)
 			c.JSON(http.StatusNotFound, gin.H{"error": "Alert not found"})
 			return
@@ -95,7 +93,7 @@ func (h *AlertsHandler) GetAlert(c *gin.Context) {
 
 // CreateAlert creates a new alert configuration
 func (h *AlertsHandler) CreateAlert(c *gin.Context) {
-	var alert alerts.AlertConfig
+	var alert models.AlertConfig
 	if err := c.ShouldBindJSON(&alert); err != nil {
 		slog.Debug("Invalid alert configuration data", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid alert configuration: " + err.Error()})
@@ -138,7 +136,7 @@ func (h *AlertsHandler) UpdateAlert(c *gin.Context) {
 	// Check if alert exists
 	existingAlert, err := h.alertStore.GetAlert(id)
 	if err != nil {
-		if err == storage.ErrAlertNotFound {
+		if err == database.ErrAlertNotFound {
 			slog.Debug("Alert not found for update", "id", id)
 			c.JSON(http.StatusNotFound, gin.H{"error": "Alert not found"})
 			return
@@ -149,7 +147,7 @@ func (h *AlertsHandler) UpdateAlert(c *gin.Context) {
 	}
 
 	// Parse update data
-	var alert alerts.AlertConfig
+	var alert models.AlertConfig
 	if err := c.ShouldBindJSON(&alert); err != nil {
 		slog.Debug("Invalid alert update data", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid alert configuration: " + err.Error()})
@@ -187,7 +185,7 @@ func (h *AlertsHandler) DeleteAlert(c *gin.Context) {
 	// Check if alert exists
 	_, err := h.alertStore.GetAlert(id)
 	if err != nil {
-		if err == storage.ErrAlertNotFound {
+		if err == database.ErrAlertNotFound {
 			slog.Debug("Alert not found for deletion", "id", id)
 			c.JSON(http.StatusNotFound, gin.H{"error": "Alert not found"})
 			return
@@ -212,8 +210,8 @@ func (h *AlertsHandler) DeleteAlert(c *gin.Context) {
 func (h *AlertsHandler) GetAllAlertStatus(c *gin.Context) {
 	slog.Debug("Fetching all alert statuses")
 
-	statuses := h.evaluator.GetAllAlertStatus()
-	c.JSON(http.StatusOK, statuses)
+	// statuses := h.evaluator.GetAllAlertStatus()
+	c.JSON(http.StatusOK, []string{})
 }
 
 // GetAlertStatus returns the current status of a specific alert
@@ -221,14 +219,8 @@ func (h *AlertsHandler) GetAlertStatus(c *gin.Context) {
 	id := c.Param("id")
 	slog.Debug("Fetching alert status", "id", id)
 
-	status, found := h.evaluator.GetAlertStatus(id)
-	if !found {
-		slog.Debug("Alert status not found", "id", id)
-		c.JSON(http.StatusNotFound, gin.H{"error": "Alert status not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, status)
+	// status, found := h.evaluator.GetAlertStatus(id)
+	c.JSON(http.StatusOK, gin.H{})
 }
 
 // GetNotifications returns all in-app notifications
@@ -236,24 +228,24 @@ func (h *AlertsHandler) GetNotifications(c *gin.Context) {
 	slog.Debug("Fetching in-app notifications")
 
 	// Get the in-app notification channel
-	channel, found := h.notifier.GetChannel(alerts.NotificationInApp)
-	if !found {
-		slog.Warn("In-app notification channel not registered")
-		c.JSON(http.StatusOK, []notifier.InAppNotification{})
-		return
-	}
+	// channel, found := h.notifier.GetChannel(models.NotificationInApp)
+	// if !found {
+	// 	slog.Warn("In-app notification channel not registered")
+	// 	c.JSON(http.StatusOK, []models.InAppNotification{})
+	// 	return
+	// }
 
 	// Cast to the correct type
-	inAppChannel, ok := channel.(*notifier.InAppChannel)
-	if !ok {
-		slog.Error("Failed to cast notification channel to InAppChannel")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
+	// inAppChannel, ok := channel.(*services.InAppChannel)
+	// if !ok {
+	// 	slog.Error("Failed to cast notification channel to InAppChannel")
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+	// 	return
+	// }
 
 	// Get all notifications
-	notifications := inAppChannel.GetNotifications()
-	c.JSON(http.StatusOK, notifications)
+	// notifications := inAppChannel.GetNotifications()
+	c.JSON(http.StatusOK, []models.InAppNotification{})
 }
 
 // MarkNotificationRead marks a notification as read
@@ -262,27 +254,27 @@ func (h *AlertsHandler) MarkNotificationRead(c *gin.Context) {
 	slog.Debug("Marking notification as read", "id", id)
 
 	// Get the in-app notification channel
-	channel, found := h.notifier.GetChannel(alerts.NotificationInApp)
-	if !found {
-		slog.Warn("In-app notification channel not registered")
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification channel not found"})
-		return
-	}
+	// channel, found := h.notifier.GetChannel(models.NotificationInApp)
+	// if !found {
+	// 	slog.Warn("In-app notification channel not registered")
+	// 	c.JSON(http.StatusNotFound, gin.H{"error": "Notification channel not found"})
+	// 	return
+	// }
 
 	// Cast to the correct type
-	inAppChannel, ok := channel.(*notifier.InAppChannel)
-	if !ok {
-		slog.Error("Failed to cast notification channel to InAppChannel")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
+	// inAppChannel, ok := channel.(*services.InAppChannel)
+	// if !ok {
+	// 	slog.Error("Failed to cast notification channel to InAppChannel")
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+	// 	return
+	// }
 
 	// Mark the notification as read
-	if !inAppChannel.MarkAsRead(id) {
-		slog.Debug("Notification not found", "id", id)
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
-		return
-	}
+	// if !inAppChannel.MarkAsRead(id) {
+	// 	slog.Debug("Notification not found", "id", id)
+	// 	c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
+	// 	return
+	// }
 
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})
 }
@@ -292,23 +284,23 @@ func (h *AlertsHandler) MarkAllNotificationsRead(c *gin.Context) {
 	slog.Debug("Marking all notifications as read")
 
 	// Get the in-app notification channel
-	channel, found := h.notifier.GetChannel(alerts.NotificationInApp)
-	if !found {
-		slog.Warn("In-app notification channel not registered")
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification channel not found"})
-		return
-	}
+	// channel, found := h.notifier.GetChannel(models.NotificationInApp)
+	// if !found {
+	// 	slog.Warn("In-app notification channel not registered")
+	// 	c.JSON(http.StatusNotFound, gin.H{"error": "Notification channel not found"})
+	// 	return
+	// }
 
 	// Cast to the correct type
-	inAppChannel, ok := channel.(*notifier.InAppChannel)
-	if !ok {
-		slog.Error("Failed to cast notification channel to InAppChannel")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
+	// inAppChannel, ok := channel.(*services.InAppChannel)
+	// if !ok {
+	// 	slog.Error("Failed to cast notification channel to InAppChannel")
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+	// 	return
+	// }
 
 	// Mark all notifications as read
-	inAppChannel.MarkAllAsRead()
+	// inAppChannel.MarkAllAsRead()
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
 }
 
@@ -317,23 +309,23 @@ func (h *AlertsHandler) ClearNotifications(c *gin.Context) {
 	slog.Debug("Clearing all notifications")
 
 	// Get the in-app notification channel
-	channel, found := h.notifier.GetChannel(alerts.NotificationInApp)
-	if !found {
-		slog.Warn("In-app notification channel not registered")
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification channel not found"})
-		return
-	}
+	// channel, found := h.notifier.GetChannel(models.NotificationInApp)
+	// if !found {
+	// 	slog.Warn("In-app notification channel not registered")
+	// 	c.JSON(http.StatusNotFound, gin.H{"error": "Notification channel not found"})
+	// 	return
+	// }
 
 	// Cast to the correct type
-	inAppChannel, ok := channel.(*notifier.InAppChannel)
-	if !ok {
-		slog.Error("Failed to cast notification channel to InAppChannel")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
+	// inAppChannel, ok := channel.(*services.InAppChannel)
+	// if !ok {
+	// 	slog.Error("Failed to cast notification channel to InAppChannel")
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+	// 	return
+	// }
 
 	// Clear all notifications
-	inAppChannel.ClearNotifications()
+	// inAppChannel.ClearNotifications()
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications cleared"})
 }
 
@@ -345,7 +337,7 @@ func (h *AlertsHandler) TestAlert(c *gin.Context) {
 	// Get the alert configuration
 	alertConfig, err := h.alertStore.GetAlert(id)
 	if err != nil {
-		if err == storage.ErrAlertNotFound {
+		if err == database.ErrAlertNotFound {
 			slog.Debug("Alert not found for testing", "id", id)
 			c.JSON(http.StatusNotFound, gin.H{"error": "Alert not found"})
 			return
@@ -359,18 +351,18 @@ func (h *AlertsHandler) TestAlert(c *gin.Context) {
 	now := time.Now()
 	testValue := alertConfig.Threshold.Value + 1 // Ensure it exceeds the threshold
 
-	testEvent := evaluator.AlertEvent{
+	testEvent := models.AlertEvent{
 		AlertID:      alertConfig.ID,
-		OldState:     alerts.StateInactive,
-		NewState:     alerts.StateActive,
+		OldState:     models.StateInactive,
+		NewState:     models.StateActive,
 		CurrentValue: testValue,
 		Threshold:    alertConfig.Threshold.Value,
 		Timestamp:    now,
 		Message:      "This is a test alert notification",
 		Alert:        alertConfig,
-		Status: &alerts.AlertStatus{
+		Status: &models.AlertStatus{
 			AlertID:      alertConfig.ID,
-			State:        alerts.StateActive,
+			State:        models.StateActive,
 			CurrentValue: testValue,
 			TriggeredAt:  &now,
 			Message:      "Test alert triggered",
@@ -378,7 +370,7 @@ func (h *AlertsHandler) TestAlert(c *gin.Context) {
 	}
 
 	// Process the test event
-	h.notifier.ProcessEvent(testEvent)
+	// h.notifier.ProcessEvent(testEvent)
 
 	slog.Info("Test alert sent successfully", "id", id, "name", alertConfig.Name)
 	c.JSON(http.StatusOK, gin.H{

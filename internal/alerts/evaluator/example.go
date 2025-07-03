@@ -1,6 +1,9 @@
 // Package evaluator provides functionality for evaluating alert conditions against system metrics
 package evaluator
 
+// All example code has been migrated to internal/sync/evaluator_example.go as part of the architecture migration.
+// This file remains as a stub for compatibility and to avoid breaking imports during transition.
+
 import (
 	"context"
 	"fmt"

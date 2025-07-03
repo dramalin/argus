@@ -25,31 +25,40 @@ help:
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 	@echo ""
 
-## build: Build the binary
+## build: Build both backend and frontend
 .PHONY: build
-build: clean
-	@echo "Building $(BINARY_NAME)..."
+build: web-build build-backend
+
+## build-backend: Build Go backend only
+.PHONY: build-backend
+build-backend:
+	@echo "Building Go backend..."
 	@mkdir -p bin
 	go build $(BUILD_FLAGS) -o $(BINARY_PATH) $(MAIN_PATH)
 	@echo "Binary built: $(BINARY_PATH)"
+
+## dev: Run both backend and frontend dev servers
+.PHONY: dev
+dev:
+	@echo "Starting backend (auto-reload if air is available)..."
+	$(MAKE) -j2 dev-backend web-dev
+
+## dev-backend: Run backend dev server only
+.PHONY: dev-backend
+dev-backend:
+	@if command -v air > /dev/null; then \
+		echo "Starting backend with air..."; \
+		hair; \
+	else \
+		echo "Air not found. Falling back to go run..."; \
+		go run $(MAIN_PATH); \
+	fi
 
 ## run: Run the application in development mode
 .PHONY: run
 run:
 	@echo "Starting Argus System Monitor..."
 	go run $(MAIN_PATH)
-
-## dev: Run with auto-reload (requires air)
-.PHONY: dev
-dev:
-	@if command -v air > /dev/null; then \
-		echo "Starting development server with auto-reload..."; \
-		air; \
-	else \
-		echo "Air not found. Install with: go install github.com/cosmtrek/air@latest"; \
-		echo "Falling back to regular run..."; \
-		$(MAKE) run; \
-	fi
 
 ## test: Run all tests
 .PHONY: test
@@ -114,10 +123,40 @@ mod-download:
 	@echo "Downloading module dependencies..."
 	go mod download
 
-## clean: Clean build artifacts
+## web-build: Build the React frontend for production
+.PHONY: web-build
+web-build:
+	@echo "Building React frontend..."
+	cd web/argus-react && npm ci && npm run build
+
+## web-dev: Start React frontend dev server (Vite)
+.PHONY: web-dev
+web-dev:
+	@echo "Starting React frontend dev server..."
+	cd web/argus-react && npm ci && npm run dev
+
+## web-lint: Lint React frontend code
+.PHONY: web-lint
+web-lint:
+	@echo "Linting React frontend..."
+	cd web/argus-react && npm run lint
+
+## web-clean: Clean React frontend build artifacts
+.PHONY: web-clean
+web-clean:
+	@echo "Cleaning React frontend build artifacts..."
+	cd web/argus-react && rm -rf dist/
+
+## web-deps: Install React frontend dependencies
+.PHONY: web-deps
+web-deps:
+	@echo "Installing React frontend dependencies..."
+	cd web/argus-react && npm ci
+
+## clean: Clean all build artifacts (backend and frontend)
 .PHONY: clean
-clean:
-	@echo "Cleaning build artifacts..."
+clean: web-clean
+	@echo "Cleaning backend build artifacts..."
 	@rm -rf bin/
 	@rm -f $(COVERAGE_OUT) coverage.html
 	@rm -f *.log
@@ -231,4 +270,23 @@ git-hooks:
 	@mkdir -p .git/hooks
 	@echo '#!/bin/sh\nmake fmt vet' > .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
-	@echo "Git hooks installed" 
+	@echo "Git hooks installed"
+
+## deps: Install all dependencies (Go and frontend)
+.PHONY: deps
+deps: mod-download web-deps
+
+## docker-up: Start all services with docker-compose
+.PHONY: docker-up
+docker-up:
+	docker-compose up -d
+
+## docker-down: Stop all services with docker-compose
+.PHONY: docker-down
+docker-down:
+	docker-compose down
+
+## docker-logs: Show logs from all docker-compose services
+.PHONY: docker-logs
+docker-logs:
+	docker-compose logs -f 

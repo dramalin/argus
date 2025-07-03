@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,12 +18,12 @@ import (
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 
-	"argus/internal/alerts/evaluator"
-	"argus/internal/alerts/notifier"
-	"argus/internal/api"
-	"argus/internal/storage"
-	"argus/internal/tasks"
-	"argus/internal/tasks/repository"
+	"argus/internal/config"
+	"argus/internal/database"
+	"argus/internal/handlers"
+	"argus/internal/models"
+	"argus/internal/server"
+	"argus/internal/services"
 )
 
 // setupLogger configures structured logging
@@ -222,30 +223,29 @@ func main() {
 
 	slog.Info("Starting Argus System Monitor")
 
-	// Set Gin to release mode for production
-	gin.SetMode(gin.ReleaseMode)
-
-	router := gin.New()
-
-	// Add middleware
-	router.Use(loggingMiddleware())
-	router.Use(corsMiddleware())
-	router.Use(gin.Recovery())
-
-	slog.Info("Middleware configured successfully")
+	// Load configuration
+	cfgPath := "config.yaml"
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		cfgPath = "config.example.yaml"
+	}
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		slog.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Configuration loaded successfully", "config_file", cfgPath)
 
 	// Initialize alert storage
-	configDir := ".argus/config"
-	alertStore, err := storage.NewAlertStore(configDir)
+	alertStore, err := database.NewAlertStore(cfg.Alerts.StoragePath)
 	if err != nil {
 		slog.Error("Failed to initialize alert storage", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Alert storage initialized successfully", "config_dir", configDir)
+	slog.Info("Alert storage initialized successfully", "storage_path", cfg.Alerts.StoragePath)
 
 	// Initialize alert evaluator
-	evalConfig := evaluator.DefaultConfig()
-	alertEvaluator := evaluator.NewEvaluator(alertStore, evalConfig)
+	evalConfig := services.DefaultConfig()
+	alertEvaluator := services.NewEvaluator(alertStore, evalConfig)
 
 	// Create a context for the evaluator
 	evalCtx, evalCancel := context.WithCancel(context.Background())
@@ -259,23 +259,23 @@ func main() {
 	slog.Info("Alert evaluator started successfully")
 
 	// Initialize notification system
-	notifierConfig := notifier.DefaultConfig()
-	alertNotifier := notifier.NewNotifier(notifierConfig)
+	notifierConfig := services.DefaultConfig()
+	alertNotifier := services.NewNotifier(notifierConfig)
 
 	// Register notification channels
-	inAppChannel := notifier.NewInAppChannel(100) // Store up to 100 notifications
+	inAppChannel := services.NewInAppChannel(100) // Store up to 100 notifications
 	alertNotifier.RegisterChannel(inAppChannel)
 
 	// Register email notification if configured
 	if os.Getenv("SMTP_HOST") != "" {
-		emailConfig := &notifier.EmailConfig{
+		emailConfig := &services.EmailConfig{
 			Host:     os.Getenv("SMTP_HOST"),
 			Port:     getEnvAsInt("SMTP_PORT", 587), // Convert string to int with default value
 			Username: os.Getenv("SMTP_USERNAME"),
 			Password: os.Getenv("SMTP_PASSWORD"),
 			From:     os.Getenv("SMTP_FROM"),
 		}
-		emailChannel := notifier.NewEmailChannel(emailConfig)
+		emailChannel := services.NewEmailChannel(emailConfig)
 		alertNotifier.RegisterChannel(emailChannel)
 		slog.Info("Email notification channel registered successfully")
 	}
@@ -289,28 +289,27 @@ func main() {
 	slog.Info("Alert notification system initialized successfully")
 
 	// Create API handlers
-	alertsHandler := api.NewAlertsHandler(alertStore, alertEvaluator, alertNotifier)
+	alertsHandler := handlers.NewAlertsHandler(alertStore, alertEvaluator, alertNotifier)
 
 	// Initialize task repository and scheduler
-	taskRepo, err := repository.NewFileTaskRepository(".argus/tasks")
+	taskRepo, err := database.NewFileTaskRepository(cfg.Tasks.StoragePath)
 	if err != nil {
 		slog.Error("Failed to initialize task repository", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("Task repository initialized successfully")
-
-	taskScheduler := tasks.NewTaskScheduler(taskRepo, nil)
+	taskScheduler := services.NewTaskScheduler(taskRepo, nil)
 
 	// Register all task runners
-	runners := []tasks.TaskRunner{}
-	runnerTypes := []tasks.TaskType{
-		tasks.TaskLogRotation,
-		tasks.TaskMetricsAggregation,
-		tasks.TaskHealthCheck,
-		tasks.TaskSystemCleanup,
+	runners := []services.TaskRunner{}
+	runnerTypes := []models.TaskType{
+		models.TaskLogRotation,
+		models.TaskMetricsAggregation,
+		models.TaskHealthCheck,
+		models.TaskSystemCleanup,
 	}
 	for _, t := range runnerTypes {
-		runner, err := tasks.NewTaskRunner(t)
+		runner, err := services.NewTaskRunner(t)
 		if err != nil {
 			slog.Error("Failed to create task runner", "type", t, "error", err)
 			continue
@@ -326,51 +325,24 @@ func main() {
 	slog.Info("Task scheduler started successfully")
 
 	// Create tasks API handler
-	tasksHandler := api.NewTasksHandler(taskRepo, taskScheduler)
+	tasksHandler := handlers.NewTasksHandler(taskRepo, taskScheduler)
 
-	// Serve static files from webapp directory
-	router.Static("/static", "./webapp")
-	router.StaticFile("/", "./webapp/index.html")
+	// --- Use the new server package for all server setup ---
+	router := server.NewServer(cfg, alertsHandler, tasksHandler, getCPU, getMemory, getNetwork, getProcess)
+	// Add WebSocket route
+	router.GET("/ws", server.WebSocketHandler)
 
-	// Serve individual JS files from the webapp directory
-	router.StaticFile("/app.js", "./webapp/app.js")
-	router.StaticFile("/alerts.js", "./webapp/alerts.js")
-	router.StaticFile("/alert-status.js", "./webapp/alert-status.js")
-	router.StaticFile("/shared.js", "./webapp/shared.js")
-
-	slog.Info("Static file serving configured", "webapp_path", "./webapp")
-
-	// API routes
-	apiGroup := router.Group("/api")
-	{
-		apiGroup.GET("/cpu", getCPU)
-		apiGroup.GET("/memory", getMemory)
-		apiGroup.GET("/network", getNetwork)
-		apiGroup.GET("/process", getProcess)
-
-		// Register alert API routes
-		alertsHandler.RegisterRoutes(apiGroup)
-		// Register task API routes
-		tasksHandler.RegisterRoutes(apiGroup)
-	}
-
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		slog.Debug("Health check requested")
-		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
-	})
-
-	slog.Info("API routes configured successfully")
+	slog.Info("API routes and static file serving configured via server package")
 
 	// Create HTTP server
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler: router,
 	}
 
 	// Start server in a goroutine
 	go func() {
-		slog.Info("Starting HTTP server", "address", ":8080", "url", "http://localhost:8080")
+		slog.Info("Starting HTTP server", "address", srv.Addr, "url", fmt.Sprintf("http://%s%s", cfg.Server.Host, srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("Failed to start server", "error", err)
 			os.Exit(1)

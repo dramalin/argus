@@ -59,12 +59,12 @@ project-root/
 │   │   ├── config_test.go          # Configuration tests
 │   │   └── timezone.go             # Timezone handling utilities
 │   │
-│   ├── server/                      # HTTP server components
+│   ├── server/                     # HTTP server components
 │   │   ├── server.go               # Main server setup and routing
 │   │   ├── middleware.go           # HTTP middleware (auth, logging, etc.)
 │   │   └── websocket.go            # WebSocket connection handling
 │   │
-│   ├── sync/                        # Business logic services
+│   ├── services/                   # Business logic services
 │   │   ├── service.go              # Core business logic
 │   │   ├── service_test.go         # Service tests
 │   │   └── notifier.go             # Event notification system

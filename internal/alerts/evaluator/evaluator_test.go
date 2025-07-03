@@ -1,5 +1,8 @@
 package evaluator
 
+// All evaluator tests have been migrated to internal/sync/evaluator_test.go as part of the architecture migration.
+// This file remains as a stub for compatibility and to avoid breaking imports during transition.
+
 import (
 	"context"
 	"os"
