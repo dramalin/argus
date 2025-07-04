@@ -8,9 +8,51 @@ Built with:
 - React
 - TypeScript
 - Vite
+- Material UI (MUI)
 - Chart.js
 
 The application uses a component-based architecture with responsive design to provide a seamless monitoring experience.
+
+## UI Design System
+
+Argus uses a custom Material Design theme based on a Morandi blue color palette. The theme provides a calm, professional interface that reduces eye strain during extended monitoring sessions.
+
+### Theme Features
+
+- Custom Morandi blue color palette
+- Material Design components and styling
+- Responsive layout system
+- Accessibility-compliant design
+- Dark mode support
+
+For detailed information about the design system, color usage, typography, and component styling guidelines, refer to the [Style Guide](./src/theme/style-guide.md).
+
+## Theme Usage
+
+The application uses Material UI's theming system. The theme is defined in `src/theme/theme.ts` and uses the Morandi blue palette from `src/theme/morandiPalette.ts`.
+
+To use the theme in your components:
+
+```tsx
+// Access theme in styled components
+import { styled } from '@mui/material/styles';
+
+const StyledComponent = styled('div')(({ theme }) => ({
+  backgroundColor: theme.palette.background.paper,
+  padding: theme.spacing(2),
+}));
+
+// Use the sx prop for inline styling
+<Box
+  sx={{
+    bgcolor: 'primary.main',
+    color: 'primary.contrastText',
+    p: 2,
+  }}
+>
+  Content
+</Box>
+```
 
 ## Development
 
@@ -40,6 +82,15 @@ The application is integrated with the Go backend through API calls. The Go serv
 2. Serve the `index.html` file for all non-API routes (SPA fallback)
 3. Serve API endpoints under the `/api` path
 
+## ESLint Configuration
+
+```js
+// eslint.config.js
+export default tseslint.config([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
       // Remove tseslint.configs.recommended and replace with this
       ...tseslint.configs.recommendedTypeChecked,
       // Alternatively, use this for stricter rules

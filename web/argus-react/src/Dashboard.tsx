@@ -575,7 +575,7 @@ export const Dashboard: React.FC = () => {
         variant="body2" 
         color="text.secondary" 
         align="center" 
-        sx={{ mt: 4, fontStyle: 'italic' }}
+        sx={{ mt: 4, fontStyle: 'bold' }}
         aria-live="polite"
       >
         Last updated: {new Date().toLocaleTimeString()}
