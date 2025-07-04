@@ -244,7 +244,7 @@ func main() {
 	slog.Info("Alert storage initialized successfully", "storage_path", cfg.Alerts.StoragePath)
 
 	// Initialize alert evaluator
-	evalConfig := services.DefaultConfig()
+	evalConfig := services.DefaultEvaluatorConfig()
 	alertEvaluator := services.NewEvaluator(alertStore, evalConfig)
 
 	// Create a context for the evaluator

@@ -20,7 +20,6 @@ import (
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/slog"
 )
 
 const (
@@ -231,11 +230,7 @@ func (e *Evaluator) generateEvent(oldState, newState models.AlertState, currentV
 	case e.eventCh <- event:
 		// Event sent successfully
 	default:
-		slog.Warn("Event channel full, dropping alert event",
-			"alert_id", config.ID,
-			"alert_name", config.Name,
-			"old_state", oldState,
-			"new_state", newState)
+		log.Printf("Event channel full, dropping alert event: alert_id=%s alert_name=%s old_state=%v new_state=%v", config.ID, config.Name, oldState, newState)
 	}
 }
 
@@ -359,7 +354,7 @@ func (e *Evaluator) compareValue(current, threshold float64, operator models.Com
 	case models.OperatorNotEqual:
 		return current != threshold
 	default:
-		slog.Error("Unknown comparison operator", "operator", operator)
+		log.Printf("Unknown comparison operator: %v", operator)
 		return false
 	}
 }

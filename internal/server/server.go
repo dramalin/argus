@@ -32,6 +32,17 @@ func NewServer(cfg *config.Config, alertsHandler IRoutesRegister, tasksHandler I
 	router.StaticFile("/shared.js", "./web/static/js/shared.js")
 	router.StaticFile("/css/main.css", "./web/static/css/main.css")
 
+	// Serve React frontend (SPA) from /app
+	router.Static("/app", "./web/argus-react/dist")
+	// Optionally, serve index.html for all unmatched /app routes (SPA fallback)
+	router.NoRoute(func(c *gin.Context) {
+		if c.Request.URL.Path == "/app" || (len(c.Request.URL.Path) >= 5 && c.Request.URL.Path[:5] == "/app/") {
+			c.File("./web/argus-react/dist/index.html")
+			return
+		}
+		c.Next()
+	})
+
 	// API routes
 	apiGroup := router.Group("/api")
 	{

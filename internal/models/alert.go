@@ -189,6 +189,8 @@ type AlertState string
 const (
 	StateActive   AlertState = "active"
 	StateInactive AlertState = "inactive"
+	StatePending  AlertState = "pending"
+	StateResolved AlertState = "resolved"
 )
 
 // AlertStatus represents the current status of an alert

@@ -21,19 +21,14 @@ import (
 // @author Argus
 
 const (
-	DefaultConfigDir = ".argus/tasks"
-	TasksDir         = "configurations"
-	ExecutionsDir    = "executions"
-	DefaultFileMode  = 0644
-	DefaultDirMode   = 0755
+	TasksDir      = "configurations"
+	ExecutionsDir = "executions"
 )
 
 var (
 	ErrTaskNotFound      = errors.New("task configuration not found")
 	ErrExecutionNotFound = errors.New("task execution record not found")
 	ErrInvalidTaskID     = errors.New("invalid task ID")
-	ErrDirectoryCreation = errors.New("failed to create directory")
-	ErrFileLocked        = errors.New("file is locked for writing")
 )
 
 type FileTaskRepository struct {

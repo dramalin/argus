@@ -257,5 +257,37 @@ func NewTaskRunner(taskType models.TaskType) (TaskRunner, error) {
 	}
 }
 
+type LogRotationRunner struct {
+	BaseTaskRunner
+}
+
+func (r *LogRotationRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+	return nil, errors.New("LogRotationRunner not implemented")
+}
+
+type MetricsAggregationRunner struct {
+	BaseTaskRunner
+}
+
+func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+	return nil, errors.New("MetricsAggregationRunner not implemented")
+}
+
+type HealthCheckRunner struct {
+	BaseTaskRunner
+}
+
+func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+	return nil, errors.New("HealthCheckRunner not implemented")
+}
+
+type SystemCleanupRunner struct {
+	BaseTaskRunner
+}
+
+func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+	return nil, errors.New("SystemCleanupRunner not implemented")
+}
+
 // LogRotationRunner, MetricsAggregationRunner, HealthCheckRunner, SystemCleanupRunner, and helpers go here (see runner.go for full code)
 // ...
