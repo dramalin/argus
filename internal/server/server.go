@@ -25,24 +25,20 @@ func NewServer(cfg *config.Config, alertsHandler IRoutesRegister, tasksHandler I
 	router.Use(CORSMiddleware())
 	router.Use(gin.Recovery())
 
-	// Static files
-	router.Static("/static", "./web/static")
-	router.StaticFile("/", "./web/static/index.html")
-	router.StaticFile("/app.js", "./web/static/js/app.js")
-	router.StaticFile("/alerts.js", "./web/static/js/alerts.js")
-	router.StaticFile("/alert-status.js", "./web/static/js/alert-status.js")
-	router.StaticFile("/shared.js", "./web/static/js/shared.js")
-	router.StaticFile("/css/main.css", "./web/static/css/main.css")
+	// Serve static assets from the release folder
+	router.Static("/assets", "./web/assets")
 
-	// Serve React frontend (SPA) from /app
-	router.Static("/app", "./web/argus-react/dist")
-	// Optionally, serve index.html for all unmatched /app routes (SPA fallback)
+	// Explicitly serve specific files from root
+	router.StaticFile("/", "./web/index.html")
+	router.StaticFile("/vite.svg", "./web/vite.svg")
+
+	// Serve index.html for all other routes (SPA fallback)
 	router.NoRoute(func(c *gin.Context) {
-		if c.Request.URL.Path == "/app" || (len(c.Request.URL.Path) >= 5 && c.Request.URL.Path[:5] == "/app/") {
-			c.File("./web/argus-react/dist/index.html")
+		// Skip already handled routes
+		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
 			return
 		}
-		c.Next()
+		c.File("./web/index.html")
 	})
 
 	// API routes

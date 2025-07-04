@@ -5,11 +5,12 @@ A real-time Linux system performance monitoring web application built with Go (G
 ## Features
 
 - **Real-time Monitoring**: CPU, memory, network, and process metrics
-- **Interactive Dashboard**: Modern React UI with live charts
+- **Interactive Dashboard**: Modern React UI with live charts and WebSocket connection
 - **RESTful API**: Clean endpoints for system and task management
 - **Task Scheduling**: Cron-based system maintenance and health checks
 - **Dockerized**: Production-ready multi-stage Docker build
 - **Configurable**: YAML-based configuration with environment overrides
+- **Single Page Application**: Fully responsive React frontend with automatic API integration
 
 ## Project Structure
 
@@ -17,9 +18,9 @@ A real-time Linux system performance monitoring web application built with Go (G
 argus/
 ├── cmd/argus/main.go          # Main application entry point
 ├── internal/                  # Internal packages (config, server, services, handlers, models, database)
-├── web/                       # Frontend and static assets
-│   ├── argus-react/           # React (Vite) SPA frontend
-│   └── static/                # Static HTML/CSS/JS assets
+├── web/                       # Frontend assets
+│   ├── argus-react/           # React (Vite) SPA frontend source
+│   └── release/               # Built React SPA for production
 ├── Dockerfile                 # Multi-stage Docker build
 ├── docker-compose.yml         # Dev/prod orchestration
 ├── config.example.yaml        # Config template
@@ -71,7 +72,8 @@ argus/
    - Frontend: [http://localhost:5173](http://localhost:5173)
 
 3. **Access the app:**
-   - Open [http://localhost:5173](http://localhost:5173) for the React dashboard.
+   - During development: Open [http://localhost:5173](http://localhost:5173) for the React dashboard.
+   - Backend server with React: [http://localhost:8080](http://localhost:8080)
 
 ### Production Build
 
@@ -87,7 +89,7 @@ argus/
    ./bin/argus
    ```
 
-   - Serves static assets from `web/static/` (built by frontend)
+   - Serves the React SPA from `web/release/` (built by frontend)
 
 ### Docker Workflow
 

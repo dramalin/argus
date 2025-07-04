@@ -1,23 +1,44 @@
-# React + TypeScript + Vite
+# Argus React Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the React frontend for the Argus System Monitor. It provides a modern, responsive UI for monitoring system resources and managing tasks.
 
-Currently, two official plugins are available:
+## Technology Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Built with:
+- React
+- TypeScript
+- Vite
+- Chart.js
 
-## Expanding the ESLint configuration
+The application uses a component-based architecture with responsive design to provide a seamless monitoring experience.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Development
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+To start the development server:
+
+```bash
+npm run dev
+```
+
+This will start a local development server with hot module replacement.
+
+## Building for Production
+
+To build the application for production:
+
+```bash
+npm run build
+```
+
+This will create an optimized production build in the `dist` directory. The build artifacts will be copied to the `web/release` directory by the project's Makefile.
+
+## Integration with Go Backend
+
+The application is integrated with the Go backend through API calls. The Go server is configured to:
+
+1. Serve static assets from the `/assets` path
+2. Serve the `index.html` file for all non-API routes (SPA fallback)
+3. Serve API endpoints under the `/api` path
 
       // Remove tseslint.configs.recommended and replace with this
       ...tseslint.configs.recommendedTypeChecked,

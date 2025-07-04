@@ -48,8 +48,8 @@ WORKDIR /home/argus
 # Copy built application
 COPY --from=go-builder /app/main .
 
-# Copy built React app as static assets
-COPY --from=node-builder /app/web/argus-react/dist ./web/static/
+# Copy built React app to release directory
+COPY --from=node-builder /app/web/argus-react/dist ./web/release/
 
 # Copy configuration template (user should mount config.yaml in production)
 COPY config.example.yaml ./config.yaml

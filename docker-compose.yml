@@ -14,8 +14,8 @@ services:
                         - ./config.yaml:/home/argus/config.yaml:ro
                         # Mount data directory for persistence
                         - argus_data:/home/argus/.argus
-                        # Mount built static assets for development (optional)
-                        - ./web/argus-react/dist:/home/argus/web/static:ro
+                        # Mount built React app for development (optional)
+                        - ./web/argus-react/dist:/home/argus/web/release:ro
                 restart: unless-stopped
                 healthcheck:
                         test:
