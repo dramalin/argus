@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"syscall"
 	"time"
@@ -168,15 +169,17 @@ func getProcess(c *gin.Context) {
 		return
 	}
 
-	result := []gin.H{}
-	count := 0
+	type processInfo struct {
+		pid        int32
+		name       string
+		cpuPercent float64
+		memPercent float32
+	}
 
-	// Limit to top 20 processes to avoid overwhelming the frontend
+	var processes []processInfo
+
+	// Collect all process information
 	for _, p := range procs {
-		if count >= 20 {
-			break
-		}
-
 		name, err := p.Name()
 		if err != nil {
 			continue
@@ -192,13 +195,34 @@ func getProcess(c *gin.Context) {
 			memP = 0.0
 		}
 
-		result = append(result, gin.H{
-			"pid":         p.Pid,
-			"name":        name,
-			"cpu_percent": cpuP,
-			"mem_percent": memP,
+		processes = append(processes, processInfo{
+			pid:        p.Pid,
+			name:       name,
+			cpuPercent: cpuP,
+			memPercent: memP,
 		})
-		count++
+	}
+
+	// Sort by CPU percentage in descending order
+	sort.Slice(processes, func(i, j int) bool {
+		return processes[i].cpuPercent > processes[j].cpuPercent
+	})
+
+	// Take top 20 processes
+	result := []gin.H{}
+	limit := 20
+	if len(processes) < limit {
+		limit = len(processes)
+	}
+
+	for i := 0; i < limit; i++ {
+		p := processes[i]
+		result = append(result, gin.H{
+			"pid":         p.pid,
+			"name":        p.name,
+			"cpu_percent": p.cpuPercent,
+			"mem_percent": p.memPercent,
+		})
 	}
 
 	slog.Debug("Process metrics retrieved successfully", "process_count", len(result))

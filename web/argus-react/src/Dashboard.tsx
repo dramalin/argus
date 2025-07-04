@@ -25,10 +25,14 @@ import {
 import { visuallyHidden } from '@mui/utils';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
+// Maximum number of data points to keep in history
+const MAX_HISTORY_POINTS = 20;
+
 export const Dashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cpuHistory, setCpuHistory] = useState<{value: number; timestamp: string}[]>([]);
   const theme = useTheme();
 
   useEffect(() => {
@@ -39,6 +43,21 @@ export const Dashboard: React.FC = () => {
         
         if (response.success && response.data) {
           setMetrics(response.data);
+          
+          // Update CPU history with new data point
+          setCpuHistory(prevHistory => {
+            const newHistory = [
+              ...prevHistory, 
+              { 
+                value: response.data!.cpu.usage_percent, 
+                timestamp: new Date().toLocaleTimeString() 
+              }
+            ];
+            
+            // Keep only the last MAX_HISTORY_POINTS data points
+            return newHistory.slice(-MAX_HISTORY_POINTS);
+          });
+          
           setError(null);
         } else {
           setError(response.error || 'Failed to fetch metrics');
@@ -120,16 +139,20 @@ export const Dashboard: React.FC = () => {
 
   // Prepare chart data
   const prepareChartData = (metrics: SystemMetrics) => {
-    // CPU data for gauge-like bar chart
-    const cpuData = {
-      labels: ['CPU Usage'],
+    // CPU usage history line chart
+    const cpuHistoryData = {
+      labels: cpuHistory.map(point => point.timestamp),
       datasets: [
         {
           label: 'CPU Usage (%)',
-          data: [metrics.cpu.usage_percent],
-          backgroundColor: 'rgba(106, 123, 162, 0.6)',  // Morandi blue
+          data: cpuHistory.map(point => point.value),
           borderColor: 'rgba(106, 123, 162, 1)',        // Morandi blue
-          borderWidth: 1,
+          backgroundColor: 'rgba(106, 123, 162, 0.2)',  // Morandi blue with transparency
+          borderWidth: 2,
+          tension: 0.4,                                 // Adds curve to the line
+          fill: true,                                   // Fill area under the line
+          pointRadius: 2,                               // Small points
+          pointHoverRadius: 5,                          // Larger points on hover
         },
       ],
     };
@@ -190,7 +213,7 @@ export const Dashboard: React.FC = () => {
       ],
     };
 
-    return { cpuData, memoryData, cpuLoadData, networkData };
+    return { cpuHistoryData, memoryData, cpuLoadData, networkData };
   };
 
   // Common chart options
@@ -232,6 +255,53 @@ export const Dashboard: React.FC = () => {
         }
       }
     }
+  };
+
+  // Line chart specific options
+  const lineChartOptions = {
+    ...chartOptions,
+    scales: {
+      x: {
+        grid: {
+          color: theme.palette.divider,
+        },
+        ticks: {
+          color: theme.palette.text.secondary,
+          maxRotation: 0,
+          autoSkipPadding: 15,
+          callback: function(value: any, index: number, values: any[]) {
+            // Show fewer x-axis labels for better readability
+            return index % Math.ceil(values.length / 6) === 0 ? value : '';
+          }
+        },
+      },
+      y: {
+        beginAtZero: true,
+        max: 100, // CPU percentage is 0-100
+        grid: {
+          color: theme.palette.divider,
+        },
+        ticks: {
+          color: theme.palette.text.secondary,
+          callback: function(value: any) {
+            return value + '%';
+          }
+        },
+      }
+    },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
+    elements: {
+      line: {
+        tension: 0.4 // Smoother curve
+      },
+      point: {
+        radius: 2,
+        hoverRadius: 5,
+      }
+    },
   };
 
   // Prepare charts data if metrics are available
@@ -415,6 +485,19 @@ export const Dashboard: React.FC = () => {
           {/* Charts */}
           {charts && (
             <Grid container spacing={3} sx={{ mb: 4 }}>
+              {/* CPU Usage History Chart - Now in 2-column layout */}
+              <Grid item xs={12} md={6}>
+                <ChartWidget 
+                  type="line" 
+                  data={charts.cpuHistoryData} 
+                  options={lineChartOptions} 
+                  title="CPU Usage History"
+                  description="Real-time CPU usage percentage over time"
+                  height={300}
+                  id="cpu-history-chart"
+                />
+              </Grid>
+              
               <Grid item xs={12} md={6}>
                 <ChartWidget 
                   type="bar" 
@@ -435,17 +518,6 @@ export const Dashboard: React.FC = () => {
                   description="Distribution of used and free memory"
                   height={300}
                   id="memory-chart"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <ChartWidget 
-                  type="bar" 
-                  data={charts.cpuData} 
-                  options={chartOptions} 
-                  title="CPU Usage"
-                  description="Current CPU usage percentage"
-                  height={300}
-                  id="cpu-chart"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
