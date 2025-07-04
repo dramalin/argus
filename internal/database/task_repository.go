@@ -222,9 +222,9 @@ func (r *FileTaskRepository) RecordExecution(ctx context.Context, execution *mod
 		return fmt.Errorf("cannot create execution for task: %w", err)
 	}
 
-	// ID is required and must be provided
-	if execution.ID == "" {
-		return errors.New("execution ID is required")
+	// ExecutionID is required and must be provided
+	if execution.ExecutionID == "" {
+		return errors.New("execution ExecutionID is required")
 	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -232,7 +232,7 @@ func (r *FileTaskRepository) RecordExecution(ctx context.Context, execution *mod
 	if err := os.MkdirAll(taskExecDir, DefaultDirMode); err != nil {
 		return fmt.Errorf("%w: %s: %v", ErrDirectoryCreation, taskExecDir, err)
 	}
-	filePath := filepath.Join(taskExecDir, fmt.Sprintf("%s.json", execution.ID))
+	filePath := filepath.Join(taskExecDir, fmt.Sprintf("%s.json", execution.ExecutionID))
 	return r.writeExecutionToFile(execution, filePath)
 }
 

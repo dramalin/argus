@@ -223,6 +223,6 @@ func (h *TasksHandler) RunTaskNow(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Task executed successfully", "id", id, "execution_id", execution.ID, "status", execution.Status)
+	slog.Info("Task executed successfully", "id", id, "execution_id", execution.ExecutionID, "status", execution.Status)
 	c.JSON(http.StatusOK, execution)
 }
