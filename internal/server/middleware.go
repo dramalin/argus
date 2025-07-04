@@ -7,6 +7,7 @@ import (
 )
 
 // LoggingMiddleware logs HTTP requests in a structured way.
+// Filters out non-essential log messages.
 func LoggingMiddleware() gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		slog.Info("HTTP Request",
@@ -15,7 +16,6 @@ func LoggingMiddleware() gin.HandlerFunc {
 			"status", param.StatusCode,
 			"latency", param.Latency,
 			"client_ip", param.ClientIP,
-			"user_agent", param.Request.UserAgent(),
 		)
 		return ""
 	})

@@ -29,7 +29,7 @@ import (
 // setupLogger configures structured logging
 func setupLogger() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: slog.LevelWarn, // Increase level to Warning to reduce info logs
 	}))
 	slog.SetDefault(logger)
 }
@@ -221,9 +221,7 @@ func main() {
 	// Setup structured logging
 	setupLogger()
 
-	slog.Info("Starting Argus System Monitor")
-
-	// Load configuration
+	// Load configuration (with minimal logging)
 	cfgPath := "config.yaml"
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
 		cfgPath = "config.example.yaml"
@@ -233,7 +231,6 @@ func main() {
 		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Configuration loaded successfully", "config_file", cfgPath)
 
 	// Initialize alert storage
 	alertStore, err := database.NewAlertStore(cfg.Alerts.StoragePath)
@@ -241,7 +238,6 @@ func main() {
 		slog.Error("Failed to initialize alert storage", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Alert storage initialized successfully", "storage_path", cfg.Alerts.StoragePath)
 
 	// Initialize alert evaluator
 	evalConfig := services.DefaultEvaluatorConfig()
@@ -256,7 +252,6 @@ func main() {
 		slog.Error("Failed to start alert evaluator", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Alert evaluator started successfully")
 
 	// Initialize notification system
 	notifierConfig := services.DefaultConfig()

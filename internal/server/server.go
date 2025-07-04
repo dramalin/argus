@@ -15,11 +15,13 @@ type IRoutesRegister interface {
 // NewServer sets up the Gin engine, middleware, and routes.
 // Accepts configuration, alert/task handlers, and returns the *gin.Engine.
 func NewServer(cfg *config.Config, alertsHandler IRoutesRegister, tasksHandler IRoutesRegister, getCPU, getMemory, getNetwork, getProcess gin.HandlerFunc) *gin.Engine {
-	gin.SetMode(gin.ReleaseMode)
+	// Set Gin to release mode and disable default console logging
+	// gin.SetMode(gin.ReleaseMode)
+
 	router := gin.New()
 
 	// Middleware
-	router.Use(LoggingMiddleware())
+	router.Use(LoggingMiddleware()) // Using our custom selective logging middleware
 	router.Use(CORSMiddleware())
 	router.Use(gin.Recovery())
 
