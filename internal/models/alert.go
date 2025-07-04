@@ -1,7 +1,7 @@
 // File: internal/models/alert.go
 // Brief: Alert-related data models for Argus
 // Detailed: Contains type definitions for MetricType, ComparisonOperator, AlertSeverity, NotificationType, ThresholdConfig, NotificationConfig, AlertConfig, AlertState, AlertStatus, and related constants/methods.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 package models

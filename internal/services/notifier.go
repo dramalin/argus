@@ -1,7 +1,7 @@
 // File: internal/sync/notifier.go
 // Brief: Unified notification system for alerts (migrated from internal/alerts/notifier/)
 // Detailed: Contains Notifier, NotificationChannel, EmailChannel, InAppChannel, and all related logic for alert notifications.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 // Package services provides notification logic for the Argus system.

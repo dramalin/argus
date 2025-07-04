@@ -1,7 +1,7 @@
 // File: internal/models/response.go
 // Brief: API response models for Argus
 // Detailed: Contains type definitions for APIResponse and Meta, used for consistent API responses.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 package models

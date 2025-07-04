@@ -1,7 +1,7 @@
 // File: internal/models/task.go
 // Brief: Task-related data models for Argus
 // Detailed: Contains type definitions for TaskType, TaskStatus, Schedule, TaskConfig, TaskExecution, and related constants/methods.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 package models

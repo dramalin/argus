@@ -1,7 +1,7 @@
 // File: internal/sync/evaluator.go
 // Brief: Unified alert evaluation logic (migrated from internal/alerts/evaluator/)
 // Detailed: Contains Evaluator, metricCollector, and all related logic for evaluating alert conditions and generating events.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 package services

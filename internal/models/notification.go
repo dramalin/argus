@@ -1,7 +1,7 @@
 // File: internal/models/notification.go
 // Brief: Notification-related data models for Argus
 // Detailed: Contains type definition for InAppNotification.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 package models

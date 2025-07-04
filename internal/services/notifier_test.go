@@ -1,7 +1,7 @@
 // File: internal/services/notifier_test.go
 // Brief: Tests for unified notification system for alerts (migrated from internal/alerts/notifier/)
 // Detailed: Contains tests for Notifier, NotificationChannel, EmailChannel, InAppChannel, and all related logic for alert notifications.
-// Author: Argus Migration (AI)
+// Author: drama.lin@aver.com
 // Date: 2024-07-03
 
 package services
