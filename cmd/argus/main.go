@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/load"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/load"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v3/process"
 
 	"argus/internal/config"
 	"argus/internal/database"
@@ -30,7 +30,7 @@ import (
 // setupLogger configures structured logging
 func setupLogger() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelWarn, // Increase level to Warning to reduce info logs
+		Level: slog.LevelDebug, // Increase level to Warning to reduce info logs
 	}))
 	slog.SetDefault(logger)
 }
@@ -160,9 +160,21 @@ func getNetwork(c *gin.Context) {
 }
 
 func getProcess(c *gin.Context) {
+	// Add panic recovery to catch segmentation faults
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Panic occurred in getProcess", "panic", r)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error while fetching process metrics"})
+		}
+	}()
+
 	slog.Debug("Fetching process metrics")
 
-	procs, err := process.Processes()
+	// Create context with timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	procs, err := process.ProcessesWithContext(ctx)
 	if err != nil {
 		slog.Error("Failed to get process list", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get process list: " + err.Error()})
@@ -177,46 +189,86 @@ func getProcess(c *gin.Context) {
 	}
 
 	var processes []processInfo
+	processedCount := 0
+	errorCount := 0
 
-	// Collect all process information
+	// Collect all process information with better error handling
 	for _, p := range procs {
-		name, err := p.Name()
-		if err != nil {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			slog.Warn("Process metrics collection cancelled due to timeout")
+			break
+		default:
+		}
+
+		// Skip invalid processes
+		if p == nil || p.Pid <= 0 {
 			continue
 		}
 
-		cpuP, err := p.CPUPercent()
-		if err != nil {
-			cpuP = 0.0
-		}
+		// Add individual process timeout and error handling
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Debug("Panic occurred processing individual process", "pid", p.Pid, "panic", r)
+					errorCount++
+				}
+			}()
 
-		memP, err := p.MemoryPercent()
-		if err != nil {
-			memP = 0.0
-		}
+			processedCount++
 
-		processes = append(processes, processInfo{
-			pid:        p.Pid,
-			name:       name,
-			cpuPercent: cpuP,
-			memPercent: memP,
-		})
+			name, err := p.NameWithContext(ctx)
+			if err != nil {
+				slog.Debug("Failed to get process name", "pid", p.Pid, "error", err)
+				return
+			}
+
+			// Skip kernel threads and system processes that might cause issues
+			if name == "" || name[0] == '[' {
+				return
+			}
+
+			var cpuP float64 = 0.0
+			var memP float32 = 0.0
+
+			// Get CPU percentage with context and error handling
+			if cpu, err := p.CPUPercentWithContext(ctx); err == nil {
+				cpuP = cpu
+			} else {
+				slog.Debug("Failed to get CPU percent", "pid", p.Pid, "name", name, "error", err)
+			}
+
+			// Get memory percentage with context and error handling - this is where the segfault occurs
+			if mem, err := p.MemoryPercentWithContext(ctx); err == nil {
+				memP = mem
+			} else {
+				slog.Debug("Failed to get memory percent", "pid", p.Pid, "name", name, "error", err)
+				// Don't return here, still include the process with 0 memory
+			}
+
+			processes = append(processes, processInfo{
+				pid:        p.Pid,
+				name:       name,
+				cpuPercent: cpuP,
+				memPercent: memP,
+			})
+		}()
 	}
+
+	slog.Debug("Process collection completed",
+		"total_processed", processedCount,
+		"successful", len(processes),
+		"errors", errorCount)
 
 	// Sort by CPU percentage in descending order
 	sort.Slice(processes, func(i, j int) bool {
 		return processes[i].cpuPercent > processes[j].cpuPercent
 	})
 
-	// Take top 20 processes
+	// Return all processes without limit
 	result := []gin.H{}
-	limit := 20
-	if len(processes) < limit {
-		limit = len(processes)
-	}
-
-	for i := 0; i < limit; i++ {
-		p := processes[i]
+	for _, p := range processes {
 		result = append(result, gin.H{
 			"pid":         p.pid,
 			"name":        p.name,
