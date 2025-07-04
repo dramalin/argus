@@ -9,14 +9,14 @@ RELEASE_DIR=./release
 help:
 	@echo "Argus System Monitor - Available targets:"
 	@echo "  build          - Build both backend and frontend"
-	@echo "  frontend-build - Build frontend and copy to release directory"
+	@echo "  build-frontend - Build frontend and copy to release directory"
 	@echo "  build-backend  - Build Go backend only"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  analyze        - Run static analysis to find unused code"
 
-build: frontend-build build-backend
+build: build-frontend build-backend
 
-frontend-build:
+build-frontend:
 	@echo "Building frontend..."
 	cd $(FRONTEND_DIR) && npm install && npm run build
 	@echo "Copying frontend build to release directory..."
