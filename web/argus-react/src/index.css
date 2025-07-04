@@ -1,88 +1,31 @@
+/* Base styles that don't conflict with Material UI */
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+  /* We can keep font variables as they might be used elsewhere */
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+
+  /* Remove color variables as they're now defined in the theme */
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-
-  /* Remove background color as we'll apply it to body */
-
+  
+  /* Remove hardcoded colors */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #9f7aea;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #805ad5;
+/* Reset styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
-  padding: 0;
-  min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #333;
+  margin: 0;
 }
 
-h1 {
-  font-size: 2.5rem;
-  line-height: 1.1;
-  margin-bottom: 10px;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-h2 {
-  font-size: 2rem;
-  margin-bottom: 20px;
-  color: white;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-h3 {
-  font-size: 1.5rem;
-  margin-bottom: 15px;
-  color: #4b5563;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #7c3aed;
-  color: white;
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
-
-button:hover {
-  background-color: #6d28d9;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
+/* Remove all dashboard, layout, and component-specific styles as they're now handled by Material UI */
+/* Only keep global styles that don't conflict with Material UI */
