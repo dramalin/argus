@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"argus/internal/models"
+	"argus/internal/services"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
@@ -37,65 +38,60 @@ var (
 	ErrInvalidParameter = errors.New("invalid task parameter")
 )
 
-// TaskRunner defines the interface for executing tasks
-type TaskRunner interface {
-	// Run executes a task and returns the execution results
-	Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error)
-
-	// GetType returns the type of task this runner handles
-	GetType() models.TaskType
-}
-
-// BaseTaskRunner provides common functionality for task runners
-type BaseTaskRunner struct {
-	taskType models.TaskType
-}
-
-// GetType returns the type of task this runner handles
-func (r *BaseTaskRunner) GetType() models.TaskType {
-	return r.taskType
-}
-
-// NewTaskRunner creates a new task runner for the given task type
-func NewTaskRunner(taskType models.TaskType) (TaskRunner, error) {
-	switch taskType {
-	case models.TaskLogRotation:
-		return &LogRotationRunner{BaseTaskRunner{taskType: models.TaskLogRotation}}, nil
-	case models.TaskMetricsAggregation:
-		return &MetricsAggregationRunner{BaseTaskRunner{taskType: models.TaskMetricsAggregation}}, nil
-	case models.TaskHealthCheck:
-		return &HealthCheckRunner{BaseTaskRunner{taskType: models.TaskHealthCheck}}, nil
-	case models.TaskSystemCleanup:
-		return &SystemCleanupRunner{BaseTaskRunner{taskType: models.TaskSystemCleanup}}, nil
-	default:
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedTaskType, taskType)
-	}
-}
-
 // LogRotationRunner implements TaskRunner for log rotation tasks
 type LogRotationRunner struct {
-	BaseTaskRunner
+	services.BaseTaskRunner
 }
 
-// Run executes a log rotation task
-func (r *LogRotationRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+// GetType returns the task type that this runner handles
+func (r *LogRotationRunner) GetType() models.TaskType {
+	return models.TaskLogRotation
+}
+
+// Execute executes a log rotation task
+func (r *LogRotationRunner) Execute(ctx context.Context, task models.TaskConfig) (*models.TaskResult, error) {
 	slog.Info("Starting log rotation task", "task_id", task.ID, "name", task.Name)
 
-	// Create execution record
-	execution := models.NewTaskExecution(task.ID)
-	execution.Start()
+	result := &models.TaskResult{
+		ExecutionID: models.GenerateID(),
+		StartTime:   time.Now(),
+		Status:      models.StatusRunning,
+	}
 
 	// Get parameters with defaults
-	logDir := getTaskParameter(task, "log_dir", "/var/log")
-	maxSizeMB, err := getTaskParameterInt(task, "max_size_mb", 10)
-	if err != nil {
-		execution.Fail(fmt.Sprintf("Invalid max_size_mb parameter: %v", err))
-		return execution, err
+	logDir := "/var/log"
+	if task.Parameters != nil {
+		if val, ok := task.Parameters["log_dir"]; ok {
+			logDir = val
+		}
 	}
-	keepCount, err := getTaskParameterInt(task, "keep_count", 5)
-	if err != nil {
-		execution.Fail(fmt.Sprintf("Invalid keep_count parameter: %v", err))
-		return execution, err
+
+	maxSizeMB := 10
+	if task.Parameters != nil {
+		if val, ok := task.Parameters["max_size_mb"]; ok {
+			maxSize, err := strconv.Atoi(val)
+			if err != nil {
+				result.Status = models.StatusFailed
+				result.Output = fmt.Sprintf("Invalid max_size_mb parameter: %v", err)
+				result.EndTime = time.Now()
+				return result, fmt.Errorf("invalid max_size_mb parameter: %w", err)
+			}
+			maxSizeMB = maxSize
+		}
+	}
+
+	keepCount := 5
+	if task.Parameters != nil {
+		if val, ok := task.Parameters["keep_count"]; ok {
+			keep, err := strconv.Atoi(val)
+			if err != nil {
+				result.Status = models.StatusFailed
+				result.Output = fmt.Sprintf("Invalid keep_count parameter: %v", err)
+				result.EndTime = time.Now()
+				return result, fmt.Errorf("invalid keep_count parameter: %w", err)
+			}
+			keepCount = keep
+		}
 	}
 
 	// Process log files
@@ -105,6 +101,7 @@ func (r *LogRotationRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 	maxSizeBytes := int64(maxSizeMB * 1024 * 1024)
 
 	// Walk through the log directory
+	var err error
 	err = filepath.WalkDir(logDir, func(path string, d fs.DirEntry, err error) error {
 		// Check for context cancellation
 		select {
@@ -154,49 +151,83 @@ func (r *LogRotationRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 	// Handle errors or context cancellation
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			execution.Fail(fmt.Sprintf("Log rotation task cancelled: %v", err))
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, err)
+			result.Status = models.StatusFailed
+			result.Output = fmt.Sprintf("Log rotation task cancelled: %v", err)
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, err)
 		}
-		execution.Fail(fmt.Sprintf("Error during log rotation: %v", err))
-		return execution, err
+		result.Status = models.StatusFailed
+		result.Output = fmt.Sprintf("Error during log rotation: %v", err)
+		result.EndTime = time.Now()
+		return result, err
 	}
 
 	// Record successful execution
 	fmt.Fprintf(&output, "Log rotation completed. Processed %d files, rotated %d files.\n", processedCount, rotatedCount)
-	execution.Complete(output.String())
+	result.Status = models.StatusCompleted
+	result.Output = output.String()
+	result.EndTime = time.Now()
 
 	slog.Info("Log rotation task completed",
 		"task_id", task.ID,
 		"processed", processedCount,
 		"rotated", rotatedCount)
 
-	return execution, nil
+	return result, nil
 }
 
 // MetricsAggregationRunner implements TaskRunner for metrics aggregation tasks
 type MetricsAggregationRunner struct {
-	BaseTaskRunner
+	services.BaseTaskRunner
 }
 
-// Run executes a metrics aggregation task
-func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+// GetType returns the task type that this runner handles
+func (r *MetricsAggregationRunner) GetType() models.TaskType {
+	return models.TaskMetricsAggregation
+}
+
+// Execute executes a metrics aggregation task
+func (r *MetricsAggregationRunner) Execute(ctx context.Context, task models.TaskConfig) (*models.TaskResult, error) {
 	slog.Info("Starting metrics aggregation task", "task_id", task.ID, "name", task.Name)
 
-	// Create execution record
-	execution := models.NewTaskExecution(task.ID)
-	execution.Start()
+	result := &models.TaskResult{
+		ExecutionID: models.GenerateID(),
+		StartTime:   time.Now(),
+		Status:      models.StatusRunning,
+	}
 
 	// Get parameters with defaults
-	outputDir := getTaskParameter(task, "output_dir", ".argus/metrics")
-	includeCPU := getTaskParameterBool(task, "include_cpu", true)
-	includeMemory := getTaskParameterBool(task, "include_memory", true)
-	includeDisk := getTaskParameterBool(task, "include_disk", true)
-	includeNetwork := getTaskParameterBool(task, "include_network", true)
+	outputDir := ".argus/metrics"
+	if val, ok := task.Parameters["output_dir"]; ok {
+		outputDir = val
+	}
+
+	includeCPU := true
+	if val, ok := task.Parameters["include_cpu"]; ok {
+		includeCPU = val == "true"
+	}
+
+	includeMemory := true
+	if val, ok := task.Parameters["include_memory"]; ok {
+		includeMemory = val == "true"
+	}
+
+	includeDisk := true
+	if val, ok := task.Parameters["include_disk"]; ok {
+		includeDisk = val == "true"
+	}
+
+	includeNetwork := true
+	if val, ok := task.Parameters["include_network"]; ok {
+		includeNetwork = val == "true"
+	}
 
 	// Ensure output directory exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		execution.Fail(fmt.Sprintf("Failed to create output directory: %v", err))
-		return execution, err
+		result.Status = models.StatusFailed
+		result.Output = fmt.Sprintf("Failed to create output directory: %v", err)
+		result.EndTime = time.Now()
+		return result, err
 	}
 
 	// Timestamp for this metrics collection
@@ -212,8 +243,10 @@ func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskCon
 	if includeCPU {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during CPU metrics collection")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during CPU metrics collection"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			if err := collectCPUMetrics(&output); err != nil {
 				fmt.Fprintf(&output, "Error collecting CPU metrics: %v\n", err)
@@ -225,8 +258,10 @@ func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskCon
 	if includeMemory {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during memory metrics collection")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during memory metrics collection"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			if err := collectMemoryMetrics(&output); err != nil {
 				fmt.Fprintf(&output, "Error collecting memory metrics: %v\n", err)
@@ -238,8 +273,10 @@ func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskCon
 	if includeDisk {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during disk metrics collection")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during disk metrics collection"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			if err := collectDiskMetrics(&output); err != nil {
 				fmt.Fprintf(&output, "Error collecting disk metrics: %v\n", err)
@@ -251,8 +288,10 @@ func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskCon
 	if includeNetwork {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during network metrics collection")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during network metrics collection"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			if err := collectNetworkMetrics(&output); err != nil {
 				fmt.Fprintf(&output, "Error collecting network metrics: %v\n", err)
@@ -262,37 +301,63 @@ func (r *MetricsAggregationRunner) Run(ctx context.Context, task *models.TaskCon
 
 	// Write output to file
 	if err := ioutil.WriteFile(filename, []byte(output.String()), 0644); err != nil {
-		execution.Fail(fmt.Sprintf("Failed to write metrics to file: %v", err))
-		return execution, err
+		result.Status = models.StatusFailed
+		result.Output = fmt.Sprintf("Failed to write metrics to file: %v", err)
+		result.EndTime = time.Now()
+		return result, err
 	}
 
 	// Record successful execution
 	resultSummary := fmt.Sprintf("Metrics collected and saved to %s", filename)
-	execution.Complete(resultSummary)
+	result.Status = models.StatusCompleted
+	result.Output = resultSummary
+	result.EndTime = time.Now()
 
 	slog.Info("Metrics aggregation task completed", "task_id", task.ID, "output_file", filename)
 
-	return execution, nil
+	return result, nil
 }
 
 // HealthCheckRunner implements TaskRunner for system health check tasks
 type HealthCheckRunner struct {
-	BaseTaskRunner
+	services.BaseTaskRunner
 }
 
-// Run executes a health check task
-func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+// GetType returns the task type that this runner handles
+func (r *HealthCheckRunner) GetType() models.TaskType {
+	return models.TaskHealthCheck
+}
+
+// Execute executes a health check task
+func (r *HealthCheckRunner) Execute(ctx context.Context, task models.TaskConfig) (*models.TaskResult, error) {
 	slog.Info("Starting health check task", "task_id", task.ID, "name", task.Name)
 
-	// Create execution record
-	execution := models.NewTaskExecution(task.ID)
-	execution.Start()
+	result := &models.TaskResult{
+		ExecutionID: models.GenerateID(),
+		StartTime:   time.Now(),
+		Status:      models.StatusRunning,
+	}
 
 	// Get parameters with defaults
-	checkDiskSpace := getTaskParameterBool(task, "check_disk_space", true)
-	checkCPULoad := getTaskParameterBool(task, "check_cpu_load", true)
-	checkMemory := getTaskParameterBool(task, "check_memory", true)
-	checkEndpoints := getTaskParameter(task, "check_endpoints", "")
+	checkDiskSpace := true
+	if val, ok := task.Parameters["check_disk_space"]; ok {
+		checkDiskSpace = val == "true"
+	}
+
+	checkCPULoad := true
+	if val, ok := task.Parameters["check_cpu_load"]; ok {
+		checkCPULoad = val == "true"
+	}
+
+	checkMemory := true
+	if val, ok := task.Parameters["check_memory"]; ok {
+		checkMemory = val == "true"
+	}
+
+	checkEndpoints := ""
+	if val, ok := task.Parameters["check_endpoints"]; ok {
+		checkEndpoints = val
+	}
 
 	var output strings.Builder
 	fmt.Fprintf(&output, "Health Check Results - %s\n", time.Now().Format(time.RFC3339))
@@ -304,8 +369,10 @@ func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 	if checkDiskSpace {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during disk space check")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during disk space check"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			healthy, results := checkDiskSpaceHealth()
 			fmt.Fprintf(&output, "Disk Space Check: %s\n%s\n", healthStatusString(healthy), results)
@@ -317,8 +384,10 @@ func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 	if checkCPULoad {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during CPU load check")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during CPU load check"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			healthy, results := checkCPULoadHealth()
 			fmt.Fprintf(&output, "CPU Load Check: %s\n%s\n", healthStatusString(healthy), results)
@@ -330,8 +399,10 @@ func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 	if checkMemory {
 		select {
 		case <-ctx.Done():
-			execution.Fail("Task cancelled during memory check")
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+			result.Status = models.StatusFailed
+			result.Output = "Task cancelled during memory check"
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			healthy, results := checkMemoryHealth()
 			fmt.Fprintf(&output, "Memory Check: %s\n%s\n", healthStatusString(healthy), results)
@@ -350,8 +421,10 @@ func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 
 			select {
 			case <-ctx.Done():
-				execution.Fail("Task cancelled during endpoint check")
-				return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
+				result.Status = models.StatusFailed
+				result.Output = "Task cancelled during endpoint check"
+				result.EndTime = time.Now()
+				return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 			default:
 				healthy, results := checkEndpointHealth(endpoint)
 				fmt.Fprintf(&output, "Endpoint Check (%s): %s\n%s\n", endpoint, healthStatusString(healthy), results)
@@ -364,42 +437,64 @@ func (r *HealthCheckRunner) Run(ctx context.Context, task *models.TaskConfig) (*
 	fmt.Fprintf(&output, "\nOverall System Health: %s\n", healthStatusString(allHealthy))
 
 	// Record execution result
-	if allHealthy {
-		execution.Complete(output.String())
-	} else {
-		// Still mark as completed, but indicate issues in the output
-		execution.Complete(output.String())
+	result.Status = models.StatusCompleted
+	result.Output = output.String()
+	result.EndTime = time.Now()
+	result.Metadata = map[string]string{
+		"all_healthy": strconv.FormatBool(allHealthy),
 	}
 
 	slog.Info("Health check task completed", "task_id", task.ID, "healthy", allHealthy)
 
-	return execution, nil
+	return result, nil
 }
 
 // SystemCleanupRunner implements TaskRunner for system cleanup tasks
 type SystemCleanupRunner struct {
-	BaseTaskRunner
+	services.BaseTaskRunner
 }
 
-// Run executes a system cleanup task
-func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) (*models.TaskExecution, error) {
+// GetType returns the task type that this runner handles
+func (r *SystemCleanupRunner) GetType() models.TaskType {
+	return models.TaskSystemCleanup
+}
+
+// Execute executes a system cleanup task
+func (r *SystemCleanupRunner) Execute(ctx context.Context, task models.TaskConfig) (*models.TaskResult, error) {
 	slog.Info("Starting system cleanup task", "task_id", task.ID, "name", task.Name)
 
-	// Create execution record
-	execution := models.NewTaskExecution(task.ID)
-	execution.Start()
-
-	// Get parameters with defaults
-	tmpDir := getTaskParameter(task, "tmp_dir", "/tmp")
-	oldestDays, err := getTaskParameterInt(task, "oldest_days", 7)
-	if err != nil {
-		execution.Fail(fmt.Sprintf("Invalid oldest_days parameter: %v", err))
-		return execution, err
+	result := &models.TaskResult{
+		ExecutionID: models.GenerateID(),
+		StartTime:   time.Now(),
+		Status:      models.StatusRunning,
 	}
 
-	excludePatterns := strings.Split(getTaskParameter(task, "exclude_patterns", ""), ",")
-	for i, pattern := range excludePatterns {
-		excludePatterns[i] = strings.TrimSpace(pattern)
+	// Get parameters with defaults
+	tmpDir := "/tmp"
+	if val, ok := task.Parameters["tmp_dir"]; ok {
+		tmpDir = val
+	}
+
+	oldestDays := 7
+	if val, ok := task.Parameters["oldest_days"]; ok {
+		days, err := strconv.Atoi(val)
+		if err != nil {
+			result.Status = models.StatusFailed
+			result.Output = fmt.Sprintf("Invalid oldest_days parameter: %v", err)
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("invalid oldest_days parameter: %w", err)
+		}
+		oldestDays = days
+	}
+
+	excludePatterns := []string{}
+	if val, ok := task.Parameters["exclude_patterns"]; ok {
+		patterns := strings.Split(val, ",")
+		for _, pattern := range patterns {
+			if trimmed := strings.TrimSpace(pattern); trimmed != "" {
+				excludePatterns = append(excludePatterns, trimmed)
+			}
+		}
 	}
 
 	// Calculate the cutoff time
@@ -411,7 +506,8 @@ func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) 
 	totalBytes := int64(0)
 
 	// Walk through the temporary directory
-	err = filepath.WalkDir(tmpDir, func(path string, d fs.DirEntry, err error) error {
+	var walkErr error
+	walkErr = filepath.WalkDir(tmpDir, func(path string, d fs.DirEntry, err error) error {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -470,19 +566,30 @@ func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) 
 	})
 
 	// Handle errors or context cancellation
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			execution.Fail(fmt.Sprintf("System cleanup task cancelled: %v", err))
-			return execution, fmt.Errorf("%w: %v", ErrTaskCancelled, err)
+	if walkErr != nil {
+		if errors.Is(walkErr, context.Canceled) {
+			result.Status = models.StatusFailed
+			result.Output = fmt.Sprintf("System cleanup task cancelled: %v", walkErr)
+			result.EndTime = time.Now()
+			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, walkErr)
 		}
-		execution.Fail(fmt.Sprintf("Error during system cleanup: %v", err))
-		return execution, err
+		result.Status = models.StatusFailed
+		result.Output = fmt.Sprintf("Error during system cleanup: %v", walkErr)
+		result.EndTime = time.Now()
+		return result, walkErr
 	}
 
 	// Record successful execution
 	resultSummary := fmt.Sprintf("Cleanup completed. Processed %d items, removed %d items, freed %d bytes.",
 		processedCount, removedCount, totalBytes)
-	execution.Complete(output.String() + "\n\n" + resultSummary)
+	result.Status = models.StatusCompleted
+	result.Output = output.String() + "\n\n" + resultSummary
+	result.EndTime = time.Now()
+	result.Metadata = map[string]string{
+		"processed_count": strconv.Itoa(processedCount),
+		"removed_count":   strconv.Itoa(removedCount),
+		"freed_bytes":     strconv.FormatInt(totalBytes, 10),
+	}
 
 	slog.Info("System cleanup task completed",
 		"task_id", task.ID,
@@ -490,57 +597,31 @@ func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) 
 		"removed", removedCount,
 		"freed_bytes", totalBytes)
 
-	return execution, nil
+	return result, nil
 }
 
 // Helper functions for task runners
 
-// getTaskParameter gets a parameter from the task config with a default value
-func getTaskParameter(task *models.TaskConfig, key, defaultValue string) string {
-	if task.Parameters == nil {
-		return defaultValue
+// formatBytes converts bytes to a human-readable string (e.g., "1.5 GB")
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
 	}
-
-	if value, exists := task.Parameters[key]; exists && value != "" {
-		return value
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
 	}
-
-	return defaultValue
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// getTaskParameterInt gets an integer parameter from the task config with a default value
-func getTaskParameterInt(task *models.TaskConfig, key string, defaultValue int) (int, error) {
-	if task.Parameters == nil {
-		return defaultValue, nil
+// healthStatusString returns a string representation of a health check status
+func healthStatusString(healthy bool) string {
+	if healthy {
+		return "HEALTHY"
 	}
-
-	if strValue, exists := task.Parameters[key]; exists && strValue != "" {
-		intValue, err := strconv.Atoi(strValue)
-		if err != nil {
-			return defaultValue, fmt.Errorf("%w: %s is not a valid integer", ErrInvalidParameter, key)
-		}
-		return intValue, nil
-	}
-
-	return defaultValue, nil
-}
-
-// getTaskParameterBool gets a boolean parameter from the task config with a default value
-func getTaskParameterBool(task *models.TaskConfig, key string, defaultValue bool) bool {
-	if task.Parameters == nil {
-		return defaultValue
-	}
-
-	if strValue, exists := task.Parameters[key]; exists {
-		switch strings.ToLower(strValue) {
-		case "true", "yes", "1", "on":
-			return true
-		case "false", "no", "0", "off":
-			return false
-		}
-	}
-
-	return defaultValue
+	return "UNHEALTHY"
 }
 
 // rotateLogFile rotates a log file, keeping a specified number of backups
@@ -671,16 +752,6 @@ func collectNetworkMetrics(output *strings.Builder) error {
 	}
 
 	return nil
-}
-
-// Health check helper functions
-
-// healthStatusString returns a string representation of a health status
-func healthStatusString(healthy bool) string {
-	if healthy {
-		return "HEALTHY"
-	}
-	return "UNHEALTHY"
 }
 
 // checkDiskSpaceHealth checks disk space health

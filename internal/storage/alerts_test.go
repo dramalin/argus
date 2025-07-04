@@ -2,11 +2,11 @@ package storage
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"argus/internal/alerts"
+	"argus/internal/database"
+	"argus/internal/models"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -20,21 +20,30 @@ func TestNewAlertStore(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Test with custom config directory
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
-	assert.Equal(t, tempDir, store.configDir)
-	assert.Equal(t, filepath.Join(tempDir, AlertsDir), store.alertsDir)
-	assert.Equal(t, filepath.Join(tempDir, BackupDir), store.backupDir)
 
-	// Verify directories were created
-	assertDirExists(t, filepath.Join(tempDir, AlertsDir))
-	assertDirExists(t, filepath.Join(tempDir, BackupDir))
+	// Create and retrieve an alert to verify store is operational
+	alert := createTestAlert()
+	err = store.CreateAlert(alert)
+	require.NoError(t, err)
+
+	retrieved, err := store.GetAlert(alert.ID)
+	require.NoError(t, err)
+	assert.Equal(t, alert.ID, retrieved.ID)
 
 	// Test with default config directory
-	defaultStore, err := NewAlertStore("")
+	defaultStore, err := database.NewAlertStore("")
 	require.NoError(t, err)
-	assert.Equal(t, DefaultConfigDir, defaultStore.configDir)
-	defer os.RemoveAll(DefaultConfigDir)
+	defaultAlert := createTestAlert()
+	err = defaultStore.CreateAlert(defaultAlert)
+	require.NoError(t, err)
+
+	defaultRetrieved, err := defaultStore.GetAlert(defaultAlert.ID)
+	require.NoError(t, err)
+	assert.Equal(t, defaultAlert.ID, defaultRetrieved.ID)
+
+	defer os.RemoveAll(database.DefaultConfigDir)
 }
 
 func TestAlertStore_CreateAlert(t *testing.T) {
@@ -43,7 +52,7 @@ func TestAlertStore_CreateAlert(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create a valid alert
@@ -51,9 +60,13 @@ func TestAlertStore_CreateAlert(t *testing.T) {
 	err = store.CreateAlert(alert)
 	require.NoError(t, err)
 
-	// Verify the file was created
-	filePath := filepath.Join(store.alertsDir, alert.ID+".json")
-	assertFileExists(t, filePath)
+	// Verify the alert was created and can be retrieved
+	retrieved, err := store.GetAlert(alert.ID)
+	require.NoError(t, err)
+	assert.Equal(t, alert.ID, retrieved.ID)
+	assert.Equal(t, alert.Name, retrieved.Name)
+	assert.Equal(t, alert.Description, retrieved.Description)
+	assert.Equal(t, alert.Severity, retrieved.Severity)
 
 	// Try to create the same alert again (should fail)
 	err = store.CreateAlert(alert)
@@ -74,7 +87,7 @@ func TestAlertStore_GetAlert(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create a test alert
@@ -92,11 +105,11 @@ func TestAlertStore_GetAlert(t *testing.T) {
 
 	// Try to get a non-existent alert
 	_, err = store.GetAlert("non-existent-id")
-	assert.ErrorIs(t, err, ErrAlertNotFound)
+	assert.ErrorIs(t, err, database.ErrAlertNotFound)
 
 	// Try to get with an empty ID
 	_, err = store.GetAlert("")
-	assert.ErrorIs(t, err, ErrInvalidAlertID)
+	assert.ErrorIs(t, err, database.ErrInvalidAlertID)
 }
 
 func TestAlertStore_UpdateAlert(t *testing.T) {
@@ -105,7 +118,7 @@ func TestAlertStore_UpdateAlert(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create a test alert
@@ -116,7 +129,7 @@ func TestAlertStore_UpdateAlert(t *testing.T) {
 	// Update the alert
 	alert.Name = "Updated Alert Name"
 	alert.Description = "Updated description"
-	alert.Severity = alerts.SeverityCritical
+	alert.Severity = models.SeverityCritical
 	err = store.UpdateAlert(alert)
 	require.NoError(t, err)
 
@@ -125,7 +138,7 @@ func TestAlertStore_UpdateAlert(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Alert Name", retrieved.Name)
 	assert.Equal(t, "Updated description", retrieved.Description)
-	assert.Equal(t, alerts.SeverityCritical, retrieved.Severity)
+	assert.Equal(t, models.SeverityCritical, retrieved.Severity)
 
 	// Verify backup was created
 	backupFiles, err := store.ListBackups(alert.ID)
@@ -136,13 +149,13 @@ func TestAlertStore_UpdateAlert(t *testing.T) {
 	nonExistentAlert := createTestAlert()
 	nonExistentAlert.ID = "non-existent-id"
 	err = store.UpdateAlert(nonExistentAlert)
-	assert.ErrorIs(t, err, ErrAlertNotFound)
+	assert.ErrorIs(t, err, database.ErrAlertNotFound)
 
 	// Try to update with an empty ID
 	invalidAlert := createTestAlert()
 	invalidAlert.ID = ""
 	err = store.UpdateAlert(invalidAlert)
-	assert.ErrorIs(t, err, ErrInvalidAlertID)
+	assert.ErrorIs(t, err, database.ErrInvalidAlertID)
 }
 
 func TestAlertStore_DeleteAlert(t *testing.T) {
@@ -151,7 +164,7 @@ func TestAlertStore_DeleteAlert(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create a test alert
@@ -163,9 +176,9 @@ func TestAlertStore_DeleteAlert(t *testing.T) {
 	err = store.DeleteAlert(alert.ID)
 	require.NoError(t, err)
 
-	// Verify the file was deleted
-	filePath := filepath.Join(store.alertsDir, alert.ID+".json")
-	assert.NoFileExists(t, filePath)
+	// Verify the alert was deleted
+	_, err = store.GetAlert(alert.ID)
+	assert.ErrorIs(t, err, database.ErrAlertNotFound)
 
 	// Verify backup was created
 	backupFiles, err := store.ListBackups(alert.ID)
@@ -174,11 +187,11 @@ func TestAlertStore_DeleteAlert(t *testing.T) {
 
 	// Try to delete a non-existent alert
 	err = store.DeleteAlert("non-existent-id")
-	assert.ErrorIs(t, err, ErrAlertNotFound)
+	assert.ErrorIs(t, err, database.ErrAlertNotFound)
 
 	// Try to delete with an empty ID
 	err = store.DeleteAlert("")
-	assert.ErrorIs(t, err, ErrInvalidAlertID)
+	assert.ErrorIs(t, err, database.ErrInvalidAlertID)
 }
 
 func TestAlertStore_ListAlerts(t *testing.T) {
@@ -187,7 +200,7 @@ func TestAlertStore_ListAlerts(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create multiple test alerts
@@ -227,7 +240,7 @@ func TestAlertStore_RestoreAlert(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create a test alert
@@ -262,7 +275,7 @@ func TestAlertStore_RestoreAlert(t *testing.T) {
 
 	// Try to restore with an empty ID
 	err = store.RestoreAlert("", timestamp)
-	assert.ErrorIs(t, err, ErrInvalidAlertID)
+	assert.ErrorIs(t, err, database.ErrInvalidAlertID)
 }
 
 func TestAlertStore_ListBackups(t *testing.T) {
@@ -271,7 +284,7 @@ func TestAlertStore_ListBackups(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	store, err := NewAlertStore(tempDir)
+	store, err := database.NewAlertStore(tempDir)
 	require.NoError(t, err)
 
 	// Create a test alert
@@ -284,7 +297,7 @@ func TestAlertStore_ListBackups(t *testing.T) {
 		alert.Name = "Updated Alert Name " + time.Now().String()
 		err = store.UpdateAlert(alert)
 		require.NoError(t, err)
-		time.Sleep(10 * time.Millisecond) // Ensure different timestamps
+		time.Sleep(time.Second) // Wait 1 second between updates to ensure unique backup timestamps
 	}
 
 	// List backups
@@ -299,44 +312,33 @@ func TestAlertStore_ListBackups(t *testing.T) {
 
 	// Try to list backups with an empty ID
 	_, err = store.ListBackups("")
-	assert.ErrorIs(t, err, ErrInvalidAlertID)
+	assert.ErrorIs(t, err, database.ErrInvalidAlertID)
 }
 
 // Helper functions
 
-func createTestAlert() *alerts.AlertConfig {
+func createTestAlert() *models.AlertConfig {
 	now := time.Now()
-	return &alerts.AlertConfig{
+	return &models.AlertConfig{
 		ID:          uuid.New().String(),
 		Name:        "Test Alert",
 		Description: "Test alert description",
 		Enabled:     true,
-		Severity:    alerts.SeverityWarning,
-		Threshold: alerts.ThresholdConfig{
-			MetricType: alerts.MetricCPU,
+		Severity:    models.SeverityWarning,
+		Threshold: models.ThresholdConfig{
+			MetricType: models.MetricCPU,
 			MetricName: "usage_percent",
-			Operator:   alerts.OperatorGreaterThan,
+			Operator:   models.OperatorGreaterThan,
 			Value:      90.0,
 			Duration:   5 * time.Minute,
 		},
-		Notifications: []alerts.NotificationConfig{
+		Notifications: []models.NotificationConfig{
 			{
-				Type:    alerts.NotificationInApp,
+				Type:    models.NotificationInApp,
 				Enabled: true,
 			},
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-}
-
-func assertFileExists(t *testing.T, path string) {
-	_, err := os.Stat(path)
-	assert.NoError(t, err, "File should exist: %s", path)
-}
-
-func assertDirExists(t *testing.T, path string) {
-	info, err := os.Stat(path)
-	assert.NoError(t, err, "Directory should exist: %s", path)
-	assert.True(t, info.IsDir(), "Path should be a directory: %s", path)
 }

@@ -290,4 +290,16 @@ func (r *SystemCleanupRunner) Run(ctx context.Context, task *models.TaskConfig) 
 }
 
 // LogRotationRunner, MetricsAggregationRunner, HealthCheckRunner, SystemCleanupRunner, and helpers go here (see runner.go for full code)
-// ...
+// TaskSchedulerInterface defines the contract for task scheduling and execution
+// Used for dependency injection and testing
+// (If you use mockery or similar tools for mocks)
+//
+//go:generate mockery --name TaskSchedulerInterface --output ../mocks --case=underscore
+type TaskSchedulerInterface interface {
+	RunTaskNow(taskID string) (*models.TaskExecution, error)
+	Start() error
+	Stop()
+}
+
+// Ensure TaskScheduler implements TaskSchedulerInterface
+var _ TaskSchedulerInterface = (*TaskScheduler)(nil)

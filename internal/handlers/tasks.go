@@ -18,11 +18,11 @@ import (
 // TasksHandler manages task-related API endpoints
 type TasksHandler struct {
 	repo      models.TaskRepository
-	scheduler *services.TaskScheduler
+	scheduler services.TaskSchedulerInterface
 }
 
 // NewTasksHandler creates a new tasks API handler
-func NewTasksHandler(repo models.TaskRepository, scheduler *services.TaskScheduler) *TasksHandler {
+func NewTasksHandler(repo models.TaskRepository, scheduler services.TaskSchedulerInterface) *TasksHandler {
 	return &TasksHandler{
 		repo:      repo,
 		scheduler: scheduler,

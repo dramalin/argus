@@ -99,24 +99,43 @@ func GenerateID() string {
 	return uuid.New().String()
 }
 
-// TaskExecution represents a single execution of a task
+// TaskRunner defines the interface for executing system maintenance tasks
+type TaskRunner interface {
+	GetType() TaskType                                                 // Returns the type of task this runner handles
+	Execute(ctx context.Context, task TaskConfig) (*TaskResult, error) // Executes a task and returns the result
+}
+
+// TaskResult represents the outcome of a task execution
+type TaskResult struct {
+	ExecutionID string            // Unique identifier for this execution
+	StartTime   time.Time         // When the execution started
+	EndTime     time.Time         // When the execution completed
+	Status      TaskStatus        // Final execution status
+	Output      string            // Task output or error message
+	Metadata    map[string]string // Additional execution metadata
+}
+
+// TaskExecution stores the details of a single task execution
 type TaskExecution struct {
-	ID        string     `json:"id"`                 // Unique identifier for this execution
-	TaskID    string     `json:"task_id"`            // ID of the task being executed
-	Status    TaskStatus `json:"status"`             // Current status of execution
-	StartTime time.Time  `json:"start_time"`         // When execution started
-	EndTime   time.Time  `json:"end_time,omitempty"` // When execution completed (if applicable)
-	Error     string     `json:"error,omitempty"`    // Error message if execution failed
-	Output    string     `json:"output,omitempty"`   // Output from the task execution
+	ExecutionID string            // Unique identifier for this execution
+	TaskID      string            // ID of the task that was executed
+	TaskName    string            // Name of the task that was executed
+	TaskType    TaskType          // Type of the task that was executed
+	StartTime   time.Time         // When the execution started
+	EndTime     time.Time         // When the execution completed
+	Status      TaskStatus        // Final execution status
+	Output      string            // Task output or error message
+	Error       string            // Error message if task failed
+	Metadata    map[string]string // Additional execution metadata
 }
 
 // NewTaskExecution creates a new execution record for a task
 func NewTaskExecution(taskID string) *TaskExecution {
 	return &TaskExecution{
-		ID:        GenerateID(),
-		TaskID:    taskID,
-		Status:    StatusPending,
-		StartTime: time.Now(),
+		ExecutionID: GenerateID(),
+		TaskID:      taskID,
+		Status:      StatusPending,
+		StartTime:   time.Now(),
 	}
 }
 

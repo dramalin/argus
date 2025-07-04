@@ -54,8 +54,8 @@ export interface AlertInfo {
   name: string;
   type: string;
   enabled: boolean;
-  conditions: Record<string, any>;
-  actions: Record<string, any>;
+  conditions: Record<string, unknown>;
+  actions: Record<string, unknown>;
   created_at: string;
   triggered_at?: string;
 }
@@ -81,9 +81,11 @@ export interface SystemMetrics {
   timestamp: string;
 }
 
+// TODO: This interface is currently unused in the codebase
+// Consider removing it if WebSocket functionality is not planned for future releases
 // WebSocket message types
 export interface WebSocketMessage {
   type: 'metrics' | 'alert' | 'task_update' | 'error';
-  data: any;
+  data: unknown;
   timestamp: string;
-} 
+}

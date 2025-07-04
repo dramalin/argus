@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+
+	"argus/internal/models"
 )
 
 const (
@@ -45,7 +47,7 @@ func DefaultTaskSchedulerConfig() *TaskSchedulerConfig {
 type TaskScheduler struct {
 	config     *TaskSchedulerConfig
 	repository TaskRepository
-	runners    map[TaskType]TaskRunner
+	runners    map[models.TaskType]models.TaskRunner
 	semaphore  chan struct{}
 	cronParser cron.Parser
 	wg         sync.WaitGroup
@@ -66,7 +68,7 @@ func NewTaskScheduler(repo TaskRepository, config *TaskSchedulerConfig) *TaskSch
 	return &TaskScheduler{
 		config:     config,
 		repository: repo,
-		runners:    make(map[TaskType]TaskRunner),
+		runners:    make(map[models.TaskType]TaskRunner),
 		semaphore:  make(chan struct{}, config.MaxConcurrentTasks),
 		cronParser: cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow),
 		ctx:        ctx,
@@ -76,7 +78,7 @@ func NewTaskScheduler(repo TaskRepository, config *TaskSchedulerConfig) *TaskSch
 }
 
 // RegisterRunner registers a runner for a specific task type
-func (s *TaskScheduler) RegisterRunner(runner TaskRunner) {
+func (s *TaskScheduler) RegisterRunner(runner models.TaskRunner) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -166,7 +168,7 @@ func (s *TaskScheduler) checkScheduledTasks() error {
 		if !task.Schedule.NextRunTime.IsZero() && task.Schedule.NextRunTime.Before(now) {
 			// Execute the task in a goroutine
 			s.wg.Add(1)
-			go func(t *TaskConfig) {
+			go func(t *models.TaskConfig) {
 				defer s.wg.Done()
 
 				// Acquire semaphore to limit concurrent tasks
@@ -187,7 +189,7 @@ func (s *TaskScheduler) checkScheduledTasks() error {
 }
 
 // executeTask executes a specific task
-func (s *TaskScheduler) executeTask(task *TaskConfig) error {
+func (s *TaskScheduler) executeTask(task *models.TaskConfig) error {
 	slog.Info("Executing scheduled task", "task_id", task.ID, "task_name", task.Name)
 
 	// Get the runner for this task type
@@ -204,7 +206,7 @@ func (s *TaskScheduler) executeTask(task *TaskConfig) error {
 	defer cancel()
 
 	// Execute the task
-	execution, err := runner.Run(ctx, task)
+	execution, err := runner.Execute(ctx, task)
 	if err != nil {
 		return fmt.Errorf("task execution failed: %w", err)
 	}
@@ -231,7 +233,7 @@ func (s *TaskScheduler) executeTask(task *TaskConfig) error {
 }
 
 // updateNextRunTime calculates and updates the next run time based on the cron expression
-func (s *TaskScheduler) updateNextRunTime(task *TaskConfig) error {
+func (s *TaskScheduler) updateNextRunTime(task *models.TaskConfig) error {
 	if task.Schedule.CronExpression == "" {
 		return fmt.Errorf("task has no cron expression")
 	}
@@ -261,7 +263,7 @@ func (s *TaskScheduler) updateNextRunTime(task *TaskConfig) error {
 }
 
 // RunTaskNow executes a task immediately, regardless of its schedule
-func (s *TaskScheduler) RunTaskNow(taskID string) (*TaskExecution, error) {
+func (s *TaskScheduler) RunTaskNow(taskID string) (*models.TaskExecution, error) {
 	// Get the task
 	task, err := s.repository.GetTask(s.ctx, taskID)
 	if err != nil {

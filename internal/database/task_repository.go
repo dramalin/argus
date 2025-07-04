@@ -87,6 +87,12 @@ func (r *FileTaskRepository) CreateTask(ctx context.Context, task *models.TaskCo
 	if task == nil {
 		return errors.New("task cannot be nil")
 	}
+
+	// Validate task before generating ID
+	if err := task.Validate(); err != nil {
+		return err
+	}
+
 	if task.ID == "" {
 		task.ID = models.GenerateID()
 	}
@@ -94,9 +100,6 @@ func (r *FileTaskRepository) CreateTask(ctx context.Context, task *models.TaskCo
 		task.CreatedAt = time.Now()
 	}
 	task.UpdatedAt = time.Now()
-	if err := task.Validate(); err != nil {
-		return err
-	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	filePath := r.taskFilePath(task.ID)
@@ -209,11 +212,19 @@ func (r *FileTaskRepository) RecordExecution(ctx context.Context, execution *mod
 	if execution == nil {
 		return errors.New("execution cannot be nil")
 	}
-	if execution.ID == "" {
-		execution.ID = models.GenerateID()
-	}
 	if execution.TaskID == "" {
 		return errors.New("task ID is required for execution record")
+	}
+
+	// Verify task exists before creating execution
+	_, err := r.GetTask(ctx, execution.TaskID)
+	if err != nil {
+		return fmt.Errorf("cannot create execution for task: %w", err)
+	}
+
+	// ID is required and must be provided
+	if execution.ID == "" {
+		return errors.New("execution ID is required")
 	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -221,7 +232,7 @@ func (r *FileTaskRepository) RecordExecution(ctx context.Context, execution *mod
 	if err := os.MkdirAll(taskExecDir, DefaultDirMode); err != nil {
 		return fmt.Errorf("%w: %s: %v", ErrDirectoryCreation, taskExecDir, err)
 	}
-	filePath := r.executionFilePath(execution.ID)
+	filePath := filepath.Join(taskExecDir, fmt.Sprintf("%s.json", execution.ID))
 	return r.writeExecutionToFile(execution, filePath)
 }
 
@@ -250,6 +261,11 @@ func (r *FileTaskRepository) GetTaskExecutions(ctx context.Context, taskID strin
 		}
 		executions = append(executions, exec)
 	}
+	// Sort executions by start time (newest first)
+	sort.Slice(executions, func(i, j int) bool {
+		return executions[i].StartTime.After(executions[j].StartTime)
+	})
+
 	if limit > 0 && len(executions) > limit {
 		executions = executions[:limit]
 	}
@@ -262,15 +278,31 @@ func (r *FileTaskRepository) GetExecution(ctx context.Context, id string) (*mode
 	}
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	filePath := r.executionFilePath(id)
-	exec, err := r.readExecutionFromFile(filePath)
+
+	// Search for the execution in the executions directory
+	execsDir := r.executionsDir
+	taskDirs, err := os.ReadDir(execsDir)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if os.IsNotExist(err) {
 			return nil, ErrExecutionNotFound
 		}
-		return nil, fmt.Errorf("failed to read execution: %w", err)
+		return nil, fmt.Errorf("failed to read executions directory: %w", err)
 	}
-	return exec, nil
+
+	for _, taskDir := range taskDirs {
+		if !taskDir.IsDir() {
+			continue
+		}
+		filePath := filepath.Join(execsDir, taskDir.Name(), fmt.Sprintf("%s.json", id))
+		exec, err := r.readExecutionFromFile(filePath)
+		if err == nil {
+			return exec, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("failed to read execution: %w", err)
+		}
+	}
+
+	return nil, ErrExecutionNotFound
 }
 
 func (r *FileTaskRepository) GetExecutions(ctx context.Context, taskID string) ([]*models.TaskExecution, error) {
