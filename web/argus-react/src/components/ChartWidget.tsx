@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import type { ChartData, ChartOptions } from 'chart.js';
 import { Paper, Box, Typography, useMediaQuery, useTheme } from '@mui/material';
@@ -16,6 +16,11 @@ interface ChartWidgetProps {
   id?: string;
 }
 
+/**
+ * ChartWidget component
+ * Renders different types of charts with responsive design and accessibility features
+ * Optimized with useMemo and useCallback for better performance
+ */
 const ChartWidget: React.FC<ChartWidgetProps> = ({ 
   type, 
   data, 
@@ -31,43 +36,46 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
   // Adjust height based on screen size
-  const responsiveHeight = isMobile ? 200 : (isTablet ? 250 : (height || 300));
+  const responsiveHeight = useMemo(() => 
+    isMobile ? 200 : (isTablet ? 250 : (height || 300))
+  , [isMobile, isTablet, height]);
   
-  const renderChart = () => {
-    // Common chart options with accessibility improvements
-    const accessibleOptions = {
-      ...options,
-      plugins: {
-        ...(options?.plugins || {}),
-        // Add a11y plugin options if they exist
-        ...(options?.plugins?.tooltip ? {
-          tooltip: {
-            ...options.plugins.tooltip,
-            enabled: true,
-            mode: 'nearest',
-            intersect: false, // Makes tooltips more accessible
-          }
-        } : {}),
-        legend: {
-          ...(options?.plugins?.legend || {}),
-          display: true,
-          position: 'bottom' as const,
-          labels: {
-            ...(options?.plugins?.legend?.labels || {}),
-            // Increase font size for better readability
-            font: {
-              size: isMobile ? 12 : 14,
-            },
-            // Increase padding for better touch targets
-            padding: isMobile ? 15 : 10,
+  // Memoize accessible options to prevent unnecessary re-renders
+  const accessibleOptions = useMemo(() => ({
+    ...options,
+    plugins: {
+      ...(options?.plugins || {}),
+      // Add a11y plugin options if they exist
+      ...(options?.plugins?.tooltip ? {
+        tooltip: {
+          ...options.plugins.tooltip,
+          enabled: true,
+          mode: 'nearest',
+          intersect: false, // Makes tooltips more accessible
+        }
+      } : {}),
+      legend: {
+        ...(options?.plugins?.legend || {}),
+        display: true,
+        position: 'bottom' as const,
+        labels: {
+          ...(options?.plugins?.legend?.labels || {}),
+          // Increase font size for better readability
+          font: {
+            size: isMobile ? 12 : 14,
           },
+          // Increase padding for better touch targets
+          padding: isMobile ? 15 : 10,
         },
       },
-      // Make responsive by default
-      responsive: true,
-      maintainAspectRatio: false,
-    };
+    },
+    // Make responsive by default
+    responsive: true,
+    maintainAspectRatio: false,
+  }), [options, isMobile]);
 
+  // Memoize chart rendering function
+  const renderChart = useCallback(() => {
     switch (type) {
       case 'line':
         return (
@@ -112,18 +120,31 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
       default:
         return <Typography color="error">Unsupported chart type</Typography>;
     }
-  };
+  }, [type, data, accessibleOptions, responsiveHeight, width, description, title]);
+
+  // Memoize the paper styles
+  const paperStyles = useMemo(() => ({ 
+    p: { xs: 1, sm: 2 }, 
+    borderRadius: 2, 
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column'
+  }), []);
+
+  // Memoize the box styles
+  const boxStyles = useMemo(() => ({ 
+    flexGrow: 1, 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    minHeight: { xs: '200px', sm: '250px', md: '300px' },
+    overflow: 'hidden'
+  }), []);
 
   return (
     <Paper 
       elevation={2} 
-      sx={{ 
-        p: { xs: 1, sm: 2 }, 
-        borderRadius: 2, 
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column'
-      }}
+      sx={paperStyles}
       role="region"
       aria-label={title || "Chart"}
       id={id}
@@ -151,14 +172,7 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
         </Typography>
       )}
       <Box 
-        sx={{ 
-          flexGrow: 1, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          minHeight: { xs: '200px', sm: '250px', md: '300px' },
-          overflow: 'hidden'
-        }}
+        sx={boxStyles}
         aria-labelledby={title ? `${id}-title` : undefined}
         aria-describedby={description ? `${id}-description` : undefined}
       >
@@ -168,4 +182,4 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
   );
 };
 
-export default ChartWidget;
+export default React.memo(ChartWidget);
