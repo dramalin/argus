@@ -19,10 +19,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogContentText,
   DialogActions,
-  Snackbar,
-  Alert,
   TextField,
   FormControl,
   InputLabel,
@@ -41,6 +38,8 @@ import AddIcon from '@mui/icons-material/Add';
 import { apiClient } from '../api';
 import type { TaskInfo, TaskStatus, TaskExecution } from '../types/api';
 import LoadingErrorHandler from '../components/LoadingErrorHandler';
+import { PageHeader, ConfirmDialog } from '../components/common';
+import { useNotification, useDataFetching, useDialogState, useDateFormatter } from '../hooks';
 
 // Task type options for the form
 const TASK_TYPES = [
@@ -55,21 +54,36 @@ const TASK_TYPES = [
  * Displays system tasks and allows management
  */
 const Tasks: React.FC = () => {
-  const [tasks, setTasks] = useState<TaskInfo[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  // Use the data fetching hook for tasks
+  const { data, loading, error, lastUpdated, refetch } = useDataFetching<TaskInfo[]>(
+    'tasks',
+    apiClient.getTasks,
+    { cacheTTL: 30000 }
+  );
+  
+  // Ensure tasks is never null
+  const tasks = data || [];
+  
+  // Use the notification hook for managing notifications
+  const { showNotification } = useNotification();
+  
+  // Use the date formatter hook for consistent date formatting
+  const { formatDate } = useDateFormatter();
+  
+  // Use the dialog state hook for managing multiple dialogs
+  const { 
+    openDialog, 
+    closeDialog, 
+    isDialogOpen 
+  } = useDialogState<'create' | 'delete' | 'executions'>();
   
   // State for task operations
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
-  const [executionsDialogOpen, setExecutionsDialogOpen] = useState<boolean>(false);
   const [taskExecutions, setTaskExecutions] = useState<TaskExecution[]>([]);
   const [executionsLoading, setExecutionsLoading] = useState<boolean>(false);
   const [executionsError, setExecutionsError] = useState<string | null>(null);
   
   // State for create task dialog
-  const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false);
   const [newTask, setNewTask] = useState<Partial<TaskInfo> & { type: string }>({
     name: '',
     type: 'health_check',
@@ -81,38 +95,6 @@ const Tasks: React.FC = () => {
     }
   });
   const [createTaskLoading, setCreateTaskLoading] = useState<boolean>(false);
-  
-  // Snackbar notification state
-  const [notification, setNotification] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'info' | 'warning';
-  }>({
-    open: false,
-    message: '',
-    severity: 'info'
-  });
-
-  // Function to fetch tasks from the API
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await apiClient.getTasks();
-      
-      if (response.success && response.data) {
-        setTasks(response.data);
-        setLastUpdated(new Date().toISOString());
-      } else {
-        setError(response.error || 'Failed to fetch tasks');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   // Function to get a specific task
   const getTask = useCallback(async (id: string) => {
@@ -137,13 +119,9 @@ const Tasks: React.FC = () => {
       const response = await apiClient.createTask(task);
       
       if (response.success && response.data) {
-        setNotification({
-          open: true,
-          message: 'Task created successfully',
-          severity: 'success'
-        });
-        fetchTasks(); // Refresh the task list
-        setCreateDialogOpen(false);
+        showNotification('Task created successfully', 'success');
+        await refetch(); // Refresh the task list
+        closeDialog('create');
         // Reset the form
         setNewTask({
           name: '',
@@ -159,15 +137,14 @@ const Tasks: React.FC = () => {
         throw new Error(response.error || 'Failed to create task');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'Failed to create task',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'Failed to create task',
+        'error'
+      );
     } finally {
       setCreateTaskLoading(false);
     }
-  }, [fetchTasks]);
+  }, [refetch, closeDialog, showNotification]);
 
   // Function to delete a task
   const deleteTask = useCallback(async (id: string) => {
@@ -175,26 +152,21 @@ const Tasks: React.FC = () => {
       const response = await apiClient.deleteTask(id);
       
       if (response.success) {
-        setNotification({
-          open: true,
-          message: 'Task deleted successfully',
-          severity: 'success'
-        });
-        fetchTasks(); // Refresh the task list
+        showNotification('Task deleted successfully', 'success');
+        await refetch(); // Refresh the task list
       } else {
         throw new Error(response.error || 'Failed to delete task');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'Failed to delete task',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'Failed to delete task',
+        'error'
+      );
     } finally {
-      setDeleteDialogOpen(false);
+      closeDialog('delete');
       setSelectedTaskId(null);
     }
-  }, [fetchTasks]);
+  }, [refetch, closeDialog, showNotification]);
 
   // Function to run a task immediately
   const runTask = useCallback(async (id: string) => {
@@ -202,32 +174,26 @@ const Tasks: React.FC = () => {
       const response = await apiClient.runTask(id);
       
       if (response.success && response.data) {
-        setNotification({
-          open: true,
-          message: 'Task started successfully',
-          severity: 'success'
-        });
-        fetchTasks(); // Refresh to show updated status
+        showNotification('Task started successfully', 'success');
+        await refetch(); // Refresh to show updated status
       } else {
         // Check for specific error messages
         if (response.error && response.error.includes('not implemented')) {
-          setNotification({
-            open: true,
-            message: 'This task type is not fully implemented in the backend yet. The API endpoint exists but the runner is not implemented.',
-            severity: 'warning'
-          });
+          showNotification(
+            'This task type is not fully implemented in the backend yet. The API endpoint exists but the runner is not implemented.',
+            'warning'
+          );
         } else {
           throw new Error(response.error || 'Failed to run task');
         }
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'Failed to run task',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'Failed to run task',
+        'error'
+      );
     }
-  }, [fetchTasks]);
+  }, [refetch, showNotification]);
 
   // Function to get task executions
   const getTaskExecutions = useCallback(async (id: string) => {
@@ -259,13 +225,13 @@ const Tasks: React.FC = () => {
   const handleViewExecutions = useCallback((id: string) => {
     setSelectedTaskId(id);
     getTaskExecutions(id);
-    setExecutionsDialogOpen(true);
-  }, [getTaskExecutions]);
+    openDialog('executions');
+  }, [getTaskExecutions, openDialog]);
 
   // Handle opening create task dialog
   const handleOpenCreateDialog = useCallback(() => {
-    setCreateDialogOpen(true);
-  }, []);
+    openDialog('create');
+  }, [openDialog]);
 
   // Handle form field changes
   const handleNewTaskChange = useCallback((field: string, value: string | boolean) => {
@@ -302,11 +268,6 @@ const Tasks: React.FC = () => {
     createTask(newTask);
   }, [createTask, newTask]);
 
-  // Fetch tasks on component mount
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
-
   // Function to render status chip with appropriate color
   const renderStatusChip = (status: TaskStatus) => {
     let color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' = 'default';
@@ -329,54 +290,39 @@ const Tasks: React.FC = () => {
     return <Chip label={status} color={color} size="small" />;
   };
 
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
-
-  // Handle close notification
-  const handleCloseNotification = () => {
-    setNotification({
-      ...notification,
-      open: false
-    });
-  };
+  // Define page header actions
+  const headerActions = (
+    <>
+      <Button 
+        variant="contained" 
+        color="success"
+        startIcon={<AddIcon />}
+        onClick={handleOpenCreateDialog}
+      >
+        Create Task
+      </Button>
+      <Button 
+        variant="contained" 
+        startIcon={<RefreshIcon />} 
+        onClick={() => refetch()}
+        disabled={loading}
+        sx={{ ml: 2 }}
+      >
+        Refresh
+      </Button>
+    </>
+  );
 
   return (
     <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h4" gutterBottom>
-            System Tasks
-          </Typography>
-          <Stack direction="row" spacing={2}>
-            <Button 
-              variant="contained" 
-              color="success"
-              startIcon={<AddIcon />}
-              onClick={handleOpenCreateDialog}
-            >
-              Create Task
-            </Button>
-            <Button 
-              variant="contained" 
-              startIcon={<RefreshIcon />} 
-              onClick={fetchTasks}
-              disabled={loading}
-            >
-              Refresh
-            </Button>
-          </Stack>
-        </Box>
-        <Typography variant="body1" paragraph>
-          View and manage scheduled system tasks. Tasks can be enabled, disabled, or manually triggered.
-        </Typography>
-        {lastUpdated && (
-          <Typography variant="caption" color="text.secondary">
-            Last updated: {formatDate(lastUpdated)}
-          </Typography>
-        )}
-      </Paper>
+      {/* Use the PageHeader component */}
+      <PageHeader
+        title="System Tasks"
+        description="View and manage scheduled system tasks. Tasks can be enabled, disabled, or manually triggered."
+        lastUpdated={lastUpdated}
+        actions={headerActions}
+        loading={loading}
+      />
 
       <LoadingErrorHandler loading={loading} error={error} loadingMessage="Loading tasks...">
         <Card>
@@ -463,7 +409,7 @@ const Tasks: React.FC = () => {
                                 color="error"
                                 onClick={() => {
                                   setSelectedTaskId(task.id);
-                                  setDeleteDialogOpen(true);
+                                  openDialog('delete');
                                 }}
                               >
                                 <DeleteIcon fontSize="small" />
@@ -483,8 +429,8 @@ const Tasks: React.FC = () => {
 
       {/* Create Task Dialog */}
       <Dialog 
-        open={createDialogOpen} 
-        onClose={() => !createTaskLoading && setCreateDialogOpen(false)}
+        open={isDialogOpen('create')} 
+        onClose={() => !createTaskLoading && closeDialog('create')}
         maxWidth="md"
         fullWidth
       >
@@ -557,7 +503,7 @@ const Tasks: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button 
-              onClick={() => setCreateDialogOpen(false)} 
+              onClick={() => closeDialog('create')} 
               disabled={createTaskLoading}
             >
               Cancel
@@ -574,35 +520,22 @@ const Tasks: React.FC = () => {
         </form>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
-      >
-        <DialogTitle id="delete-dialog-title">Delete Task</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-dialog-description">
-            Are you sure you want to delete this task? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button 
-            onClick={() => selectedTaskId && deleteTask(selectedTaskId)} 
-            color="error" 
-            autoFocus
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Delete Confirmation Dialog - Use ConfirmDialog component */}
+      <ConfirmDialog
+        open={isDialogOpen('delete')}
+        onClose={() => closeDialog('delete')}
+        onConfirm={() => selectedTaskId && deleteTask(selectedTaskId)}
+        title="Delete Task"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        severity="error"
+      />
 
       {/* Task Executions Dialog */}
       <Dialog
-        open={executionsDialogOpen}
-        onClose={() => setExecutionsDialogOpen(false)}
+        open={isDialogOpen('executions')}
+        onClose={() => closeDialog('executions')}
         aria-labelledby="executions-dialog-title"
         maxWidth="md"
         fullWidth
@@ -655,25 +588,9 @@ const Tasks: React.FC = () => {
           </LoadingErrorHandler>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setExecutionsDialogOpen(false)}>Close</Button>
+          <Button onClick={() => closeDialog('executions')}>Close</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Notification Snackbar */}
-      <Snackbar 
-        open={notification.open} 
-        autoHideDuration={6000} 
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={handleCloseNotification} 
-          severity={notification.severity} 
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

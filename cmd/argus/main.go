@@ -27,7 +27,7 @@ import (
 func setupLogger() {
 	// Create a custom handler with a specific time format
 	handler := utils.NewCustomJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: slog.LevelInfo,
 	})
 
 	// Set up structured logging with the custom handler

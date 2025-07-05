@@ -12,14 +12,9 @@ import {
   Stack,
   IconButton,
   Tooltip,
-  Alert as MuiAlert,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions,
-  Snackbar,
-  Alert
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
@@ -29,60 +24,44 @@ import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AddIcon from '@mui/icons-material/Add';
 import { apiClient } from '../api';
-import type { AlertConfig, AlertTestEvent, AlertStatus } from '../types/api';
+import type { AlertConfig, AlertStatus } from '../types/api';
 import LoadingErrorHandler from '../components/LoadingErrorHandler';
 import AlertDialog from '../components/AlertDialog';
+import { PageHeader, ConfirmDialog } from '../components/common';
+import { useNotification, useDataFetching, useDialogState, useDateFormatter } from '../hooks';
 
 /**
  * Alerts page component
  * Displays system alerts and allows management
  */
 const Alerts: React.FC = () => {
-  const [alerts, setAlerts] = useState<AlertConfig[]>([]);
-  const [alertStatuses, setAlertStatuses] = useState<Record<string, AlertStatus>>({});
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  // Use the new hooks for data fetching, notifications, and dialog state
+  const { data, loading, error, lastUpdated, refetch } = useDataFetching<AlertConfig[]>(
+    'alerts',
+    apiClient.getAlerts,
+    { cacheTTL: 30000 }
+  );
   
-  // Alert dialog state
-  const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false);
-  const [editDialogOpen, setEditDialogOpen] = useState<boolean>(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
-  const [testDialogOpen, setTestDialogOpen] = useState<boolean>(false);
+  // Ensure alerts is never null
+  const alerts = data || [];
+  
+  const [alertStatuses, setAlertStatuses] = useState<Record<string, AlertStatus>>({});
+  
+  // Use the dialog state hook for managing multiple dialogs
+  const { 
+    openDialog, 
+    closeDialog, 
+    isDialogOpen 
+  } = useDialogState<'create' | 'edit' | 'delete' | 'test'>();
+  
   const [selectedAlert, setSelectedAlert] = useState<AlertConfig | null>(null);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   
-  // Notification state
-  const [notification, setNotification] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'info' | 'warning';
-  }>({
-    open: false,
-    message: '',
-    severity: 'info'
-  });
-
-  // Function to fetch alerts from the API
-  const fetchAlerts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await apiClient.getAlerts();
-      
-      if (response.success && response.data) {
-        setAlerts(response.data);
-        setLastUpdated(new Date().toISOString());
-      } else {
-        setError(response.error || 'Failed to fetch alerts');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Use the notification hook for managing notifications
+  const { showNotification } = useNotification();
+  
+  // Use the date formatter hook for consistent date formatting
+  const { formatDate } = useDateFormatter();
 
   // Function to fetch alert statuses
   const fetchAlertStatuses = useCallback(async () => {
@@ -99,7 +78,6 @@ const Alerts: React.FC = () => {
 
   // Fetch alerts and statuses on component mount
   useEffect(() => {
-    fetchAlerts();
     fetchAlertStatuses();
     
     // Set up interval to refresh alert statuses
@@ -108,30 +86,30 @@ const Alerts: React.FC = () => {
     return () => {
       clearInterval(intervalId);
     };
-  }, [fetchAlerts, fetchAlertStatuses]);
+  }, [fetchAlertStatuses]);
 
   // Handle opening the create alert dialog
   const handleCreateAlert = () => {
     setSelectedAlert(null);
-    setCreateDialogOpen(true);
+    openDialog('create');
   };
   
   // Handle opening the edit alert dialog
   const handleEditAlert = (alert: AlertConfig) => {
     setSelectedAlert(alert);
-    setEditDialogOpen(true);
+    openDialog('edit');
   };
   
   // Handle opening the delete alert dialog
   const handleDeleteAlert = (alert: AlertConfig) => {
     setSelectedAlert(alert);
-    setDeleteDialogOpen(true);
+    openDialog('delete');
   };
   
   // Handle opening the test alert dialog
   const handleTestAlert = (alert: AlertConfig) => {
     setSelectedAlert(alert);
-    setTestDialogOpen(true);
+    openDialog('test');
   };
   
   // Handle toggling alert enabled status
@@ -142,23 +120,22 @@ const Alerts: React.FC = () => {
       const response = await apiClient.updateAlert(alert.id, updatedAlert);
       
       if (response.success && response.data) {
-        setAlerts(prev => 
-          prev.map(a => a.id === alert.id ? response.data! : a)
+        // Update the alerts list with the updated alert
+        // We don't have a setAlerts function with useDataFetching, so we need to refetch
+        await refetch();
+        
+        showNotification(
+          `Alert ${alert.enabled ? 'disabled' : 'enabled'} successfully`,
+          'success'
         );
-        setNotification({
-          open: true,
-          message: `Alert ${alert.enabled ? 'disabled' : 'enabled'} successfully`,
-          severity: 'success'
-        });
       } else {
         throw new Error(response.error || 'Failed to update alert');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'An unknown error occurred',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'An unknown error occurred',
+        'error'
+      );
     } finally {
       setActionLoading(false);
     }
@@ -178,13 +155,10 @@ const Alerts: React.FC = () => {
           notifications: response.data.notifications || alert.notifications || []
         };
         
-        setAlerts(prev => [...prev, responseData]);
-        setCreateDialogOpen(false);
-        setNotification({
-          open: true,
-          message: 'Alert created successfully',
-          severity: 'success'
-        });
+        // Refetch alerts to include the new one
+        await refetch();
+        closeDialog('create');
+        showNotification('Alert created successfully', 'success');
         
         // Refresh alert statuses
         fetchAlertStatuses();
@@ -192,11 +166,10 @@ const Alerts: React.FC = () => {
         throw new Error(response.error || 'Failed to create alert');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'An unknown error occurred',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'An unknown error occurred',
+        'error'
+      );
     } finally {
       setActionLoading(false);
     }
@@ -211,24 +184,18 @@ const Alerts: React.FC = () => {
       const response = await apiClient.updateAlert(selectedAlert.id, alert);
       
       if (response.success && response.data) {
-        setAlerts(prev => 
-          prev.map(a => a.id === selectedAlert.id ? response.data! : a)
-        );
-        setEditDialogOpen(false);
-        setNotification({
-          open: true,
-          message: 'Alert updated successfully',
-          severity: 'success'
-        });
+        // Refetch alerts to include the updated one
+        await refetch();
+        closeDialog('edit');
+        showNotification('Alert updated successfully', 'success');
       } else {
         throw new Error(response.error || 'Failed to update alert');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'An unknown error occurred',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'An unknown error occurred',
+        'error'
+      );
     } finally {
       setActionLoading(false);
     }
@@ -243,22 +210,18 @@ const Alerts: React.FC = () => {
       const response = await apiClient.deleteAlert(selectedAlert.id);
       
       if (response.success) {
-        setAlerts(prev => prev.filter(a => a.id !== selectedAlert.id));
-        setDeleteDialogOpen(false);
-        setNotification({
-          open: true,
-          message: 'Alert deleted successfully',
-          severity: 'success'
-        });
+        // Refetch alerts to remove the deleted one
+        await refetch();
+        closeDialog('delete');
+        showNotification('Alert deleted successfully', 'success');
       } else {
         throw new Error(response.error || 'Failed to delete alert');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'An unknown error occurred',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'An unknown error occurred',
+        'error'
+      );
     } finally {
       setActionLoading(false);
       setSelectedAlert(null);
@@ -274,37 +237,20 @@ const Alerts: React.FC = () => {
       const response = await apiClient.testAlert(selectedAlert.id);
       
       if (response.success) {
-        setTestDialogOpen(false);
-        setNotification({
-          open: true,
-          message: 'Test alert sent successfully',
-          severity: 'success'
-        });
+        closeDialog('test');
+        showNotification('Test alert sent successfully', 'success');
       } else {
         throw new Error(response.error || 'Failed to test alert');
       }
     } catch (err) {
-      setNotification({
-        open: true,
-        message: err instanceof Error ? err.message : 'An unknown error occurred',
-        severity: 'error'
-      });
+      showNotification(
+        err instanceof Error ? err.message : 'An unknown error occurred',
+        'error'
+      );
     } finally {
       setActionLoading(false);
       setSelectedAlert(null);
     }
-  };
-  
-  // Handle closing the notification
-  const handleCloseNotification = () => {
-    setNotification(prev => ({ ...prev, open: false }));
-  };
-  
-  // Format date for display
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString();
   };
   
   // Render threshold information
@@ -431,41 +377,38 @@ const Alerts: React.FC = () => {
     return null;
   };
 
+  // Define page header actions
+  const headerActions = (
+    <>
+      <Button 
+        variant="contained" 
+        startIcon={<AddIcon />} 
+        onClick={handleCreateAlert}
+        sx={{ mr: 1 }}
+      >
+        Create Alert
+      </Button>
+      <Button 
+        variant="contained" 
+        startIcon={<RefreshIcon />} 
+        onClick={() => { refetch(); fetchAlertStatuses(); }}
+        disabled={loading}
+      >
+        Refresh
+      </Button>
+    </>
+  );
+
   return (
     <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1">
-            Alerts
-          </Typography>
-          <Stack direction="row" spacing={2}>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
-              onClick={handleCreateAlert}
-              sx={{ mr: 1 }}
-            >
-              Create Alert
-            </Button>
-            <Button 
-              variant="contained" 
-              startIcon={<RefreshIcon />} 
-              onClick={() => { fetchAlerts(); fetchAlertStatuses(); }}
-              disabled={loading}
-            >
-              Refresh
-            </Button>
-          </Stack>
-        </Box>
-        <Typography variant="body1" paragraph>
-          View and manage alerts. Alerts can be enabled, disabled, or manually triggered.
-        </Typography>
-        {lastUpdated && (
-          <Typography variant="caption" color="text.secondary">
-            Last updated: {formatDate(lastUpdated)}
-          </Typography>
-        )}
-      </Paper>
+      {/* Use the PageHeader component */}
+      <PageHeader
+        title="Alerts"
+        description="View and manage alerts. Alerts can be enabled, disabled, or manually triggered."
+        lastUpdated={lastUpdated}
+        actions={headerActions}
+        loading={loading}
+      />
 
       <LoadingErrorHandler loading={loading} error={error} loadingMessage="Loading alerts...">
         <Box>
@@ -581,95 +524,47 @@ const Alerts: React.FC = () => {
       
       {/* Create Alert Dialog */}
       <AlertDialog
-        open={createDialogOpen}
-        onClose={() => setCreateDialogOpen(false)}
+        open={isDialogOpen('create')}
+        onClose={() => closeDialog('create')}
         onSave={handleSaveAlert}
         loading={actionLoading}
       />
       
       {/* Edit Alert Dialog */}
       <AlertDialog
-        open={editDialogOpen}
-        onClose={() => setEditDialogOpen(false)}
+        open={isDialogOpen('edit')}
+        onClose={() => closeDialog('edit')}
         onSave={handleUpdateAlert}
         alert={selectedAlert ? { ...selectedAlert } : undefined}
         isEditing={true}
         loading={actionLoading}
       />
       
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => !actionLoading && setDeleteDialogOpen(false)}
-      >
-        <DialogTitle>Delete Alert</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete the alert "{selectedAlert?.name}"? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setDeleteDialogOpen(false)} 
-            disabled={actionLoading}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmDelete} 
-            color="error" 
-            disabled={actionLoading}
-          >
-            {actionLoading ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Use the ConfirmDialog component for Delete Confirmation */}
+      <ConfirmDialog
+        open={isDialogOpen('delete')}
+        onClose={() => closeDialog('delete')}
+        onConfirm={handleConfirmDelete}
+        title="Delete Alert"
+        message={`Are you sure you want to delete the alert "${selectedAlert?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        loading={actionLoading}
+        severity="error"
+      />
       
-      {/* Test Alert Dialog */}
-      <Dialog
-        open={testDialogOpen}
-        onClose={() => !actionLoading && setTestDialogOpen(false)}
-      >
-        <DialogTitle>Test Alert</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            This will trigger a test notification for the alert "{selectedAlert?.name}". Do you want to continue?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setTestDialogOpen(false)} 
-            disabled={actionLoading}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmTest} 
-            color="primary" 
-            variant="contained"
-            disabled={actionLoading}
-          >
-            {actionLoading ? 'Testing...' : 'Test Alert'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Notification Snackbar */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={handleCloseNotification} 
-          severity={notification.severity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
+      {/* Use the ConfirmDialog component for Test Alert */}
+      <ConfirmDialog
+        open={isDialogOpen('test')}
+        onClose={() => closeDialog('test')}
+        onConfirm={handleConfirmTest}
+        title="Test Alert"
+        message={`This will trigger a test notification for the alert "${selectedAlert?.name}". Do you want to continue?`}
+        confirmText="Test Alert"
+        cancelText="Cancel"
+        loading={actionLoading}
+        severity="info"
+      />
     </Box>
   );
 };

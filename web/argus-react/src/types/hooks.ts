@@ -1,7 +1,7 @@
 /**
  * Type definitions for custom React hooks
  */
-import type { SystemMetrics, CPUInfo, MemoryInfo, NetworkInfo, ProcessInfo, ProcessResponse, ProcessQueryParams, AsyncData } from './index';
+import type { SystemMetrics, CPUInfo, MemoryInfo, NetworkInfo, ProcessInfo, ProcessResponse, ProcessQueryParams, AsyncData, ApiResponse } from './index';
 
 /**
  * Return type for useMetrics hook
@@ -125,4 +125,87 @@ export interface UsePollingResult {
   lastPollTime: number | null;
   /** Error message from last poll */
   error: string | null;
+}
+
+/**
+ * Notification severity types
+ */
+export type NotificationSeverity = 'success' | 'error' | 'info' | 'warning';
+
+/**
+ * Return type for useNotification hook
+ */
+export interface UseNotificationResult {
+  /** Function to show a notification */
+  showNotification: (message: string, severity: NotificationSeverity) => void;
+  /** Function to clear all notifications */
+  clearNotifications: () => void;
+}
+
+/**
+ * Options for useDataFetching hook
+ */
+export interface DataFetchingOptions {
+  /** Initial loading state */
+  initialLoading?: boolean;
+  /** Cache TTL in milliseconds */
+  cacheTTL?: number;
+  /** Whether to fetch on mount */
+  fetchOnMount?: boolean;
+}
+
+/**
+ * Return type for useDataFetching hook
+ */
+export interface UseDataFetchingResult<T> {
+  /** The fetched data */
+  data: T | null;
+  /** Loading state */
+  loading: boolean;
+  /** Error message */
+  error: string | null;
+  /** Timestamp of when the data was last updated */
+  lastUpdated: string | null;
+  /** Function to manually refresh the data */
+  refetch: () => Promise<void>;
+}
+
+/**
+ * Return type for useDialogState hook
+ */
+export interface UseDialogStateResult<T extends string = string> {
+  /** Current state of all dialogs */
+  dialogStates: Record<string, boolean>;
+  /** Function to open a specific dialog */
+  openDialog: (name: T) => void;
+  /** Function to close a specific dialog */
+  closeDialog: (name: T) => void;
+  /** Function to close all dialogs */
+  closeAllDialogs: () => void;
+  /** Function to check if a specific dialog is open */
+  isDialogOpen: (name: T) => boolean;
+}
+
+/**
+ * Options for useDateFormatter hook
+ */
+export interface DateFormatterOptions {
+  /** Locale for date formatting (default: 'en-US') */
+  locale?: string;
+  /** Default format for dates (default: full date and time) */
+  defaultFormat?: Intl.DateTimeFormatOptions;
+  /** Default value for invalid dates (default: 'N/A') */
+  invalidDateText?: string;
+}
+
+/**
+ * Return type for useDateFormatter hook
+ */
+export interface UseDateFormatterResult {
+  /** Format a date string to a localized string */
+  formatDate: (dateString?: string, formatOptions?: Intl.DateTimeFormatOptions) => string;
+  /** Format a timestamp (milliseconds) to a localized string */
+  formatTimestamp: (timestamp: number, formatOptions?: Intl.DateTimeFormatOptions) => string;
+  /** Format a date string as a relative time (e.g., "2 hours ago") */
+  formatRelativeTime: (dateString?: string) => string;
 } 
