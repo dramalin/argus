@@ -105,6 +105,7 @@ const SystemOverview: React.FC<SystemOverviewProps> = ({ metrics, loading }) => 
         />
       </Grid>
 
+      {/* FIXME: processCount is not correct, always 50 only, need to fix */}
       {/* Process Count */}
       <Grid item xs={12} sm={6} md={3} sx={{ pr: 3, pt: 3 }}>
         <SystemMetricsCard
