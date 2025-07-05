@@ -29,6 +29,7 @@ build-backend:
 	@echo "Building Go backend..."
 	mkdir -p $(RELEASE_DIR)/bin
 	go build -o $(RELEASE_DIR)/bin/$(BINARY_NAME) $(MAIN_PATH)
+	cp config.example.yaml $(RELEASE_DIR)/config.yaml
 	
 analyze:
 	@echo "Installing static analysis tools..."

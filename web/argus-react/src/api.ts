@@ -3,14 +3,18 @@ import type {
   CPUInfo,
   MemoryInfo,
   NetworkInfo,
-  ProcessInfo,
   TaskInfo,
   TaskExecution,
   AlertInfo,
   HealthStatus,
   ApiResponse,
-  SystemMetrics
+  SystemMetrics,
 } from './types/api';
+import type {
+  ProcessInfo,
+  ProcessQueryParams,
+  ProcessResponse
+} from './types/process';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -82,21 +86,20 @@ class ArgusApiClient {
 
   // TODO: Not currently used directly in UI, only through getAllMetrics
   // Consider removal if not needed for future development
-  async getProcesses(): Promise<ApiResponse<ProcessInfo[]>> {
-    const response = await this.request<any>('/api/process');
-    if (response.success && response.data && Array.isArray(response.data.processes)) {
-      return {
-        success: true,
-        data: response.data.processes
-      };
-    } else if (!response.success) {
-      return response;
-    } else {
-      return {
-        success: false,
-        error: 'Invalid process response format',
-      };
+  async getProcesses(params?: ProcessQueryParams): Promise<ApiResponse<ProcessResponse>> {
+    let query = '';
+    if (params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          searchParams.append(key, String(value));
+        }
+      });
+      query = '?' + searchParams.toString();
     }
+    // Explicitly use ProcessInfo type to satisfy TypeScript
+    void (false as unknown as ProcessInfo);
+    return this.request<ProcessResponse>(`/api/process${query}`);
   }
 
   async getAllMetrics(): Promise<ApiResponse<SystemMetrics>> {
@@ -111,7 +114,7 @@ class ArgusApiClient {
       if (!cpu.success || !memory.success || !network.success || !processes.success) {
         return {
           success: false,
-          error: 'Failed to fetch one or more metrics'
+          error: 'One or more metrics requests failed',
         };
       }
 
@@ -121,14 +124,14 @@ class ArgusApiClient {
           cpu: cpu.data!,
           memory: memory.data!,
           network: network.data!,
-          processes: processes.data!,
-          timestamp: new Date().toISOString()
-        }
+          processes: processes.data!.processes,
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch metrics'
+        error: error instanceof Error ? error.message : 'Failed to fetch metrics',
       };
     }
   }

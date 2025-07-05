@@ -16,7 +16,7 @@ debug:
 monitoring:
         update_interval: "5s"
         metrics_retention: "24h"
-        process_limit: 100
+        process_limit: 500
 
 alerts:
         enabled: true

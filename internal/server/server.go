@@ -89,7 +89,7 @@ func NewServer(cfg *config.Config, alertsHandler IRoutesRegister, tasksHandler I
 		c.File("./web/vite.svg")
 	})
 
-/* 	// Serve index.html for all other routes (SPA fallback) with optimized handler
+	// Serve index.html for all other routes (SPA fallback) with optimized handler
 	router.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
@@ -108,7 +108,7 @@ func NewServer(cfg *config.Config, alertsHandler IRoutesRegister, tasksHandler I
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
 		c.File("./web/index.html")
-	}) */
+	})
 
 	// API routes with optimized grouping
 	apiGroup := router.Group("/api")

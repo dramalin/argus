@@ -1,4 +1,5 @@
 // API Types for Argus System Monitor
+import type { ProcessInfo } from './process';
 
 export interface CPUInfo {
   load1: number;
@@ -19,13 +20,6 @@ export interface NetworkInfo {
   bytes_recv: number;
   packets_sent: number;
   packets_recv: number;
-}
-
-export interface ProcessInfo {
-  pid: number;
-  name: string;
-  cpu_percent: number;
-  mem_percent: number;
 }
 
 export interface TaskInfo {

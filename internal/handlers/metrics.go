@@ -127,9 +127,12 @@ type ProcessQueryParams struct {
 func (h *MetricsHandler) GetProcess(c *gin.Context) {
 	slog.Debug("Fetching cached process metrics with filters")
 
-	// Parse query parameters
+	// Parse query parameters from the HTTP request URL
+	// This uses Gin's ShouldBindQuery to automatically parse URL query parameters
+	// into the ProcessQueryParams struct based on the `form` tags
 	var params ProcessQueryParams
 	if err := c.ShouldBindQuery(&params); err != nil {
+		// If parsing fails (e.g., invalid data types), return a 400 Bad Request
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid query parameters",
 			"details": err.Error(),
@@ -221,7 +224,8 @@ func (h *MetricsHandler) GetProcess(c *gin.Context) {
 	hasPrev := params.Offset > 0
 
 	response := gin.H{
-		"processes": processes,
+		"processes":   processes,
+		"total_count": totalCount,
 		"pagination": gin.H{
 			"total_count":  totalCount,
 			"total_pages":  totalPages,
