@@ -7,6 +7,12 @@ server:
         read_timeout: "30s"
         write_timeout: "30s"
 
+debug:
+        enabled: true
+        pprof_enabled: true
+        pprof_path: "/debug/pprof"
+        benchmark_enabled: true
+
 monitoring:
         update_interval: "5s"
         metrics_retention: "24h"

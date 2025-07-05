@@ -83,7 +83,20 @@ class ArgusApiClient {
   // TODO: Not currently used directly in UI, only through getAllMetrics
   // Consider removal if not needed for future development
   async getProcesses(): Promise<ApiResponse<ProcessInfo[]>> {
-    return this.request<ProcessInfo[]>('/api/process');
+    const response = await this.request<any>('/api/process');
+    if (response.success && response.data && Array.isArray(response.data.processes)) {
+      return {
+        success: true,
+        data: response.data.processes
+      };
+    } else if (!response.success) {
+      return response;
+    } else {
+      return {
+        success: false,
+        error: 'Invalid process response format',
+      };
+    }
   }
 
   async getAllMetrics(): Promise<ApiResponse<SystemMetrics>> {

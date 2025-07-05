@@ -7,21 +7,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sort"
 	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/load"
-	"github.com/shirou/gopsutil/v3/mem"
-	"github.com/shirou/gopsutil/v3/net"
-	"github.com/shirou/gopsutil/v3/process"
 
 	"argus/internal/config"
 	"argus/internal/database"
 	"argus/internal/handlers"
+	"argus/internal/metrics"
 	"argus/internal/models"
 	"argus/internal/server"
 	"argus/internal/services"
@@ -29,8 +24,9 @@ import (
 
 // setupLogger configures structured logging
 func setupLogger() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // Increase level to Warning to reduce info logs
+	// Set up structured logging with JSON format for production
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
 	}))
 	slog.SetDefault(logger)
 }
@@ -38,14 +34,18 @@ func setupLogger() {
 // loggingMiddleware logs HTTP requests
 func loggingMiddleware() gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		slog.Info("HTTP Request",
-			"method", param.Method,
-			"path", param.Path,
-			"status", param.StatusCode,
-			"latency", param.Latency,
-			"client_ip", param.ClientIP,
-			"user_agent", param.Request.UserAgent(),
-		)
+		// Only log API requests and errors
+		if param.StatusCode >= 400 || (len(param.Path) >= 4 && param.Path[:4] == "/api") {
+			return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %#v\n%s",
+				param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+				param.StatusCode,
+				param.Latency,
+				param.ClientIP,
+				param.Method,
+				param.Path,
+				param.ErrorMessage,
+			)
+		}
 		return ""
 	})
 }
@@ -54,9 +54,8 @@ func loggingMiddleware() gin.HandlerFunc {
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -65,221 +64,6 @@ func corsMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-func getCPU(c *gin.Context) {
-	slog.Debug("Fetching CPU metrics")
-
-	loadAvg, err := load.Avg()
-	if err != nil {
-		slog.Error("Failed to get load average", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get load average: " + err.Error()})
-		return
-	}
-
-	cpuPercent, err := cpu.Percent(time.Second, false)
-	if err != nil {
-		slog.Error("Failed to get CPU usage", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get CPU usage: " + err.Error()})
-		return
-	}
-
-	usage := 0.0
-	if len(cpuPercent) > 0 {
-		usage = cpuPercent[0]
-	}
-
-	slog.Debug("CPU metrics retrieved successfully",
-		"load1", loadAvg.Load1,
-		"load5", loadAvg.Load5,
-		"load15", loadAvg.Load15,
-		"usage_percent", usage)
-
-	c.JSON(http.StatusOK, gin.H{
-		"load1":         loadAvg.Load1,
-		"load5":         loadAvg.Load5,
-		"load15":        loadAvg.Load15,
-		"usage_percent": usage,
-	})
-}
-
-func getMemory(c *gin.Context) {
-	slog.Debug("Fetching memory metrics")
-
-	vm, err := mem.VirtualMemory()
-	if err != nil {
-		slog.Error("Failed to get memory info", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get memory info: " + err.Error()})
-		return
-	}
-
-	slog.Debug("Memory metrics retrieved successfully",
-		"total", vm.Total,
-		"used", vm.Used,
-		"free", vm.Free,
-		"used_percent", vm.UsedPercent)
-
-	c.JSON(http.StatusOK, gin.H{
-		"total":        vm.Total,
-		"used":         vm.Used,
-		"free":         vm.Free,
-		"used_percent": vm.UsedPercent,
-	})
-}
-
-func getNetwork(c *gin.Context) {
-	slog.Debug("Fetching network metrics")
-
-	ioCounters, err := net.IOCounters(false)
-	if err != nil {
-		slog.Error("Failed to get network stats", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network stats: " + err.Error()})
-		return
-	}
-
-	if len(ioCounters) == 0 {
-		slog.Warn("No network interfaces found")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "No network interfaces found"})
-		return
-	}
-
-	io := ioCounters[0]
-
-	slog.Debug("Network metrics retrieved successfully",
-		"bytes_sent", io.BytesSent,
-		"bytes_recv", io.BytesRecv,
-		"packets_sent", io.PacketsSent,
-		"packets_recv", io.PacketsRecv)
-
-	c.JSON(http.StatusOK, gin.H{
-		"bytes_sent":   io.BytesSent,
-		"bytes_recv":   io.BytesRecv,
-		"packets_sent": io.PacketsSent,
-		"packets_recv": io.PacketsRecv,
-	})
-}
-
-func getProcess(c *gin.Context) {
-	// Add panic recovery to catch segmentation faults
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("Panic occurred in getProcess", "panic", r)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error while fetching process metrics"})
-		}
-	}()
-
-	slog.Debug("Fetching process metrics")
-
-	// Create context with timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	procs, err := process.ProcessesWithContext(ctx)
-	if err != nil {
-		slog.Error("Failed to get process list", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get process list: " + err.Error()})
-		return
-	}
-
-	type processInfo struct {
-		pid        int32
-		name       string
-		cpuPercent float64
-		memPercent float32
-	}
-
-	var processes []processInfo
-	processedCount := 0
-	errorCount := 0
-
-	// Collect all process information with better error handling
-	for _, p := range procs {
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			slog.Warn("Process metrics collection cancelled due to timeout")
-			break
-		default:
-		}
-
-		// Skip invalid processes
-		if p == nil || p.Pid <= 0 {
-			continue
-		}
-
-		// Add individual process timeout and error handling
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Debug("Panic occurred processing individual process", "pid", p.Pid, "panic", r)
-					errorCount++
-				}
-			}()
-
-			processedCount++
-
-			name, err := p.NameWithContext(ctx)
-			if err != nil {
-				slog.Debug("Failed to get process name", "pid", p.Pid, "error", err)
-				return
-			}
-
-			// Skip kernel threads and system processes that might cause issues
-			if name == "" || name[0] == '[' {
-				return
-			}
-
-			var cpuP float64 = 0.0
-			var memP float32 = 0.0
-
-			// Get CPU percentage with context and error handling
-			if cpu, err := p.CPUPercentWithContext(ctx); err == nil {
-				cpuP = cpu
-			} else {
-				slog.Debug("Failed to get CPU percent", "pid", p.Pid, "name", name, "error", err)
-			}
-
-			// Get memory percentage with context and error handling - this is where the segfault occurs
-			if mem, err := p.MemoryPercentWithContext(ctx); err == nil {
-				memP = mem
-			} else {
-				slog.Debug("Failed to get memory percent", "pid", p.Pid, "name", name, "error", err)
-				// Don't return here, still include the process with 0 memory
-			}
-
-			processes = append(processes, processInfo{
-				pid:        p.Pid,
-				name:       name,
-				cpuPercent: cpuP,
-				memPercent: memP,
-			})
-		}()
-	}
-
-	slog.Debug("Process collection completed",
-		"total_processed", processedCount,
-		"successful", len(processes),
-		"errors", errorCount)
-
-	// Sort by CPU percentage in descending order
-	sort.Slice(processes, func(i, j int) bool {
-		return processes[i].cpuPercent > processes[j].cpuPercent
-	})
-
-	// Return all processes without limit
-	result := []gin.H{}
-	for _, p := range processes {
-		result = append(result, gin.H{
-			"pid":         p.pid,
-			"name":        p.name,
-			"cpu_percent": p.cpuPercent,
-			"mem_percent": p.memPercent,
-		})
-	}
-
-	slog.Debug("Process metrics retrieved successfully", "process_count", len(result))
-
-	c.JSON(http.StatusOK, result)
 }
 
 // getEnvAsInt gets an environment variable as an integer with a default value
@@ -307,6 +91,31 @@ func main() {
 		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
+
+	// Initialize metrics collector
+	metricsConfig := metrics.DefaultConfig()
+	// Override with configuration if available
+	if cfg.Monitoring.UpdateInterval != "" {
+		if interval, err := time.ParseDuration(cfg.Monitoring.UpdateInterval); err == nil {
+			metricsConfig.UpdateInterval = interval
+		}
+	}
+	if cfg.Monitoring.ProcessLimit > 0 {
+		metricsConfig.ProcessLimit = cfg.Monitoring.ProcessLimit
+	}
+
+	metricsCollector := metrics.NewCollector(metricsConfig)
+
+	// Create a context for the metrics collector
+	metricsCtx, metricsCancel := context.WithCancel(context.Background())
+	defer metricsCancel()
+
+	// Start the metrics collector
+	if err := metricsCollector.Start(metricsCtx); err != nil {
+		slog.Error("Failed to start metrics collector", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Metrics collector started successfully")
 
 	// Initialize alert storage
 	alertStore, err := database.NewAlertStore(cfg.Alerts.StoragePath)
@@ -346,7 +155,7 @@ func main() {
 			Password: os.Getenv("SMTP_PASSWORD"),
 			From:     os.Getenv("SMTP_FROM"),
 		}
-		emailChannel := services.NewEmailChannel(emailConfig)
+		emailChannel := services.NewEmailChannel(emailConfig, notifierConfig)
 		alertNotifier.RegisterChannel(emailChannel)
 		slog.Info("Email notification channel registered successfully")
 	}
@@ -361,6 +170,7 @@ func main() {
 
 	// Create API handlers
 	alertsHandler := handlers.NewAlertsHandler(alertStore, alertEvaluator, alertNotifier)
+	metricsHandler := handlers.NewMetricsHandler(metricsCollector)
 
 	// Initialize task repository and scheduler
 	taskRepo, err := database.NewFileTaskRepository(cfg.Tasks.StoragePath)
@@ -399,17 +209,14 @@ func main() {
 	tasksHandler := handlers.NewTasksHandler(taskRepo, taskScheduler)
 
 	// --- Use the new server package for all server setup ---
-	router := server.NewServer(cfg, alertsHandler, tasksHandler, getCPU, getMemory, getNetwork, getProcess)
+	router := server.NewServer(cfg, alertsHandler, tasksHandler, metricsHandler)
 	// Add WebSocket route
 	router.GET("/ws", server.WebSocketHandler)
 
 	slog.Info("API routes and static file serving configured via server package")
 
-	// Create HTTP server
-	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: router,
-	}
+	// Create optimized HTTP server with production settings
+	srv := server.CreateOptimizedHTTPServer(router, fmt.Sprintf(":%d", cfg.Server.Port))
 
 	// Start server in a goroutine
 	go func() {
@@ -429,6 +236,10 @@ func main() {
 
 	// Cancel the evaluator context to stop it
 	evalCancel()
+
+	// Cancel the metrics collector context to stop it
+	metricsCancel()
+	metricsCollector.Stop()
 
 	// Give outstanding requests 30 seconds to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

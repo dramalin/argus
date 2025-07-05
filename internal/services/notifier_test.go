@@ -24,7 +24,7 @@ func TestNewNotifier(t *testing.T) {
 	assert.Equal(t, 5, n.config.RateLimit)
 	assert.Equal(t, 1*time.Hour, n.config.RateLimitWindow)
 	assert.NotNil(t, n.channels)
-	assert.NotNil(t, n.rateLimits)
+	assert.NotNil(t, n.rateLimiter)
 
 	customConfig := &NotifierConfig{
 		RateLimit:       10,
@@ -155,7 +155,7 @@ func createTestAlertEvent(t *testing.T) models.AlertEvent {
 
 // EmailChannel tests
 func TestNewEmailChannel(t *testing.T) {
-	channel := NewEmailChannel(nil)
+	channel := NewEmailChannel(nil, nil)
 	assert.NotNil(t, channel)
 	assert.NotNil(t, channel.config)
 	assert.Equal(t, "smtp.example.com", channel.config.Host)
@@ -172,7 +172,7 @@ func TestNewEmailChannel(t *testing.T) {
 		From:     "custom@example.com",
 		UseSSL:   false,
 	}
-	channel = NewEmailChannel(customConfig)
+	channel = NewEmailChannel(customConfig, nil)
 	assert.NotNil(t, channel)
 	assert.Equal(t, customConfig, channel.config)
 	assert.Equal(t, "smtp.custom.com", channel.config.Host)
@@ -184,12 +184,12 @@ func TestNewEmailChannel(t *testing.T) {
 }
 
 func TestEmailChannelType(t *testing.T) {
-	channel := NewEmailChannel(nil)
+	channel := NewEmailChannel(nil, nil)
 	assert.Equal(t, models.NotificationEmail, channel.Type())
 }
 
 func TestEmailChannelName(t *testing.T) {
-	channel := NewEmailChannel(nil)
+	channel := NewEmailChannel(nil, nil)
 	assert.Equal(t, "Email Notifications", channel.Name())
 }
 
@@ -206,7 +206,7 @@ func TestValidateRecipient(t *testing.T) {
 }
 
 func TestEmailChannelSend(t *testing.T) {
-	channel := NewEmailChannel(nil)
+	channel := NewEmailChannel(nil, nil)
 	event := createTestAlertEvent(t)
 	event.Alert.Notifications = append(event.Alert.Notifications, models.NotificationConfig{
 		Type:    models.NotificationEmail,

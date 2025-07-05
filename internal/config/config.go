@@ -18,6 +18,13 @@ type Config struct {
 		WriteTimeout string `yaml:"write_timeout"`
 	} `yaml:"server"`
 
+	Debug struct {
+		Enabled          bool   `yaml:"enabled"`
+		PprofEnabled     bool   `yaml:"pprof_enabled"`
+		PprofPath        string `yaml:"pprof_path"`
+		BenchmarkEnabled bool   `yaml:"benchmark_enabled"`
+	} `yaml:"debug"`
+
 	Monitoring struct {
 		UpdateInterval   string `yaml:"update_interval"`
 		MetricsRetention string `yaml:"metrics_retention"`
@@ -98,6 +105,17 @@ func defaultConfig() *Config {
 			ReadTimeout:  "30s",
 			WriteTimeout: "30s",
 		},
+		Debug: struct {
+			Enabled          bool   `yaml:"enabled"`
+			PprofEnabled     bool   `yaml:"pprof_enabled"`
+			PprofPath        string `yaml:"pprof_path"`
+			BenchmarkEnabled bool   `yaml:"benchmark_enabled"`
+		}{
+			Enabled:          true,
+			PprofEnabled:     true,
+			PprofPath:        "/debug/pprof",
+			BenchmarkEnabled: true,
+		},
 		Monitoring: struct {
 			UpdateInterval   string `yaml:"update_interval"`
 			MetricsRetention string `yaml:"metrics_retention"`
@@ -175,6 +193,18 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("ARGUS_SERVER_HOST"); v != "" {
 		cfg.Server.Host = v
+	}
+	if v := os.Getenv("ARGUS_DEBUG_ENABLED"); v != "" {
+		cfg.Debug.Enabled = v == "true"
+	}
+	if v := os.Getenv("ARGUS_DEBUG_PPROF_ENABLED"); v != "" {
+		cfg.Debug.PprofEnabled = v == "true"
+	}
+	if v := os.Getenv("ARGUS_DEBUG_PPROF_PATH"); v != "" {
+		cfg.Debug.PprofPath = v
+	}
+	if v := os.Getenv("ARGUS_DEBUG_BENCHMARK_ENABLED"); v != "" {
+		cfg.Debug.BenchmarkEnabled = v == "true"
 	}
 	// Add more environment variable overrides as needed for other fields
 }

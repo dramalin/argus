@@ -20,6 +20,7 @@ import (
 
 	"argus/internal/models"
 	"argus/internal/services"
+	"argus/internal/utils"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -94,8 +95,10 @@ func (r *LogRotationRunner) Execute(ctx context.Context, task models.TaskConfig)
 		}
 	}
 
-	// Process log files
-	var output strings.Builder
+	// Process log files using pooled string builder
+	output := utils.GetStringsBuilder()
+	defer utils.PutStringsBuilder(output)
+
 	rotatedCount := 0
 	processedCount := 0
 	maxSizeBytes := int64(maxSizeMB * 1024 * 1024)
@@ -112,7 +115,7 @@ func (r *LogRotationRunner) Execute(ctx context.Context, task models.TaskConfig)
 		}
 
 		if err != nil {
-			fmt.Fprintf(&output, "Error accessing path %s: %v\n", path, err)
+			fmt.Fprintf(output, "Error accessing path %s: %v\n", path, err)
 			return nil
 		}
 
@@ -131,17 +134,17 @@ func (r *LogRotationRunner) Execute(ctx context.Context, task models.TaskConfig)
 		// Get file info
 		info, err := d.Info()
 		if err != nil {
-			fmt.Fprintf(&output, "Error getting file info for %s: %v\n", path, err)
+			fmt.Fprintf(output, "Error getting file info for %s: %v\n", path, err)
 			return nil
 		}
 
 		// Check if file needs rotation
 		if info.Size() > maxSizeBytes {
 			if err := rotateLogFile(path, keepCount); err != nil {
-				fmt.Fprintf(&output, "Error rotating log file %s: %v\n", path, err)
+				fmt.Fprintf(output, "Error rotating log file %s: %v\n", path, err)
 			} else {
 				rotatedCount++
-				fmt.Fprintf(&output, "Rotated log file: %s\n", path)
+				fmt.Fprintf(output, "Rotated log file: %s\n", path)
 			}
 		}
 
@@ -163,7 +166,7 @@ func (r *LogRotationRunner) Execute(ctx context.Context, task models.TaskConfig)
 	}
 
 	// Record successful execution
-	fmt.Fprintf(&output, "Log rotation completed. Processed %d files, rotated %d files.\n", processedCount, rotatedCount)
+	fmt.Fprintf(output, "Log rotation completed. Processed %d files, rotated %d files.\n", processedCount, rotatedCount)
 	result.Status = models.StatusCompleted
 	result.Output = output.String()
 	result.EndTime = time.Now()
@@ -234,10 +237,12 @@ func (r *MetricsAggregationRunner) Execute(ctx context.Context, task models.Task
 	timestamp := time.Now()
 	filename := filepath.Join(outputDir, fmt.Sprintf("metrics-%s.txt", timestamp.Format("20060102-150405")))
 
-	// Collect and write metrics
-	var output strings.Builder
-	fmt.Fprintf(&output, "System Metrics Collection - %s\n", timestamp.Format(time.RFC3339))
-	fmt.Fprintf(&output, "========================================\n\n")
+	// Collect and write metrics using pooled string builder
+	output := utils.GetStringsBuilder()
+	defer utils.PutStringsBuilder(output)
+
+	fmt.Fprintf(output, "System Metrics Collection - %s\n", timestamp.Format(time.RFC3339))
+	fmt.Fprintf(output, "========================================\n\n")
 
 	// Collect CPU metrics if requested
 	if includeCPU {
@@ -248,8 +253,8 @@ func (r *MetricsAggregationRunner) Execute(ctx context.Context, task models.Task
 			result.EndTime = time.Now()
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
-			if err := collectCPUMetrics(&output); err != nil {
-				fmt.Fprintf(&output, "Error collecting CPU metrics: %v\n", err)
+			if err := collectCPUMetrics(output); err != nil {
+				fmt.Fprintf(output, "Error collecting CPU metrics: %v\n", err)
 			}
 		}
 	}
@@ -263,8 +268,8 @@ func (r *MetricsAggregationRunner) Execute(ctx context.Context, task models.Task
 			result.EndTime = time.Now()
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
-			if err := collectMemoryMetrics(&output); err != nil {
-				fmt.Fprintf(&output, "Error collecting memory metrics: %v\n", err)
+			if err := collectMemoryMetrics(output); err != nil {
+				fmt.Fprintf(output, "Error collecting memory metrics: %v\n", err)
 			}
 		}
 	}
@@ -278,8 +283,8 @@ func (r *MetricsAggregationRunner) Execute(ctx context.Context, task models.Task
 			result.EndTime = time.Now()
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
-			if err := collectDiskMetrics(&output); err != nil {
-				fmt.Fprintf(&output, "Error collecting disk metrics: %v\n", err)
+			if err := collectDiskMetrics(output); err != nil {
+				fmt.Fprintf(output, "Error collecting disk metrics: %v\n", err)
 			}
 		}
 	}
@@ -293,8 +298,8 @@ func (r *MetricsAggregationRunner) Execute(ctx context.Context, task models.Task
 			result.EndTime = time.Now()
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
-			if err := collectNetworkMetrics(&output); err != nil {
-				fmt.Fprintf(&output, "Error collecting network metrics: %v\n", err)
+			if err := collectNetworkMetrics(output); err != nil {
+				fmt.Fprintf(output, "Error collecting network metrics: %v\n", err)
 			}
 		}
 	}
@@ -359,9 +364,12 @@ func (r *HealthCheckRunner) Execute(ctx context.Context, task models.TaskConfig)
 		checkEndpoints = val
 	}
 
-	var output strings.Builder
-	fmt.Fprintf(&output, "Health Check Results - %s\n", time.Now().Format(time.RFC3339))
-	fmt.Fprintf(&output, "========================================\n\n")
+	// Use pooled string builder for health check output
+	output := utils.GetStringsBuilder()
+	defer utils.PutStringsBuilder(output)
+
+	fmt.Fprintf(output, "Health Check Results - %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(output, "========================================\n\n")
 
 	allHealthy := true
 
@@ -375,7 +383,7 @@ func (r *HealthCheckRunner) Execute(ctx context.Context, task models.TaskConfig)
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			healthy, results := checkDiskSpaceHealth()
-			fmt.Fprintf(&output, "Disk Space Check: %s\n%s\n", healthStatusString(healthy), results)
+			fmt.Fprintf(output, "Disk Space Check: %s\n%s\n", healthStatusString(healthy), results)
 			allHealthy = allHealthy && healthy
 		}
 	}
@@ -390,7 +398,7 @@ func (r *HealthCheckRunner) Execute(ctx context.Context, task models.TaskConfig)
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			healthy, results := checkCPULoadHealth()
-			fmt.Fprintf(&output, "CPU Load Check: %s\n%s\n", healthStatusString(healthy), results)
+			fmt.Fprintf(output, "CPU Load Check: %s\n%s\n", healthStatusString(healthy), results)
 			allHealthy = allHealthy && healthy
 		}
 	}
@@ -405,7 +413,7 @@ func (r *HealthCheckRunner) Execute(ctx context.Context, task models.TaskConfig)
 			return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 		default:
 			healthy, results := checkMemoryHealth()
-			fmt.Fprintf(&output, "Memory Check: %s\n%s\n", healthStatusString(healthy), results)
+			fmt.Fprintf(output, "Memory Check: %s\n%s\n", healthStatusString(healthy), results)
 			allHealthy = allHealthy && healthy
 		}
 	}
@@ -427,14 +435,14 @@ func (r *HealthCheckRunner) Execute(ctx context.Context, task models.TaskConfig)
 				return result, fmt.Errorf("%w: %v", ErrTaskCancelled, ctx.Err())
 			default:
 				healthy, results := checkEndpointHealth(endpoint)
-				fmt.Fprintf(&output, "Endpoint Check (%s): %s\n%s\n", endpoint, healthStatusString(healthy), results)
+				fmt.Fprintf(output, "Endpoint Check (%s): %s\n%s\n", endpoint, healthStatusString(healthy), results)
 				allHealthy = allHealthy && healthy
 			}
 		}
 	}
 
 	// Set overall health status
-	fmt.Fprintf(&output, "\nOverall System Health: %s\n", healthStatusString(allHealthy))
+	fmt.Fprintf(output, "\nOverall System Health: %s\n", healthStatusString(allHealthy))
 
 	// Record execution result
 	result.Status = models.StatusCompleted
@@ -500,7 +508,10 @@ func (r *SystemCleanupRunner) Execute(ctx context.Context, task models.TaskConfi
 	// Calculate the cutoff time
 	cutoffTime := time.Now().AddDate(0, 0, -oldestDays)
 
-	var output strings.Builder
+	// Use pooled string builder for cleanup output
+	output := utils.GetStringsBuilder()
+	defer utils.PutStringsBuilder(output)
+
 	removedCount := 0
 	processedCount := 0
 	totalBytes := int64(0)
@@ -517,7 +528,7 @@ func (r *SystemCleanupRunner) Execute(ctx context.Context, task models.TaskConfi
 		}
 
 		if err != nil {
-			fmt.Fprintf(&output, "Error accessing path %s: %v\n", path, err)
+			fmt.Fprintf(output, "Error accessing path %s: %v\n", path, err)
 			return nil
 		}
 
@@ -529,7 +540,7 @@ func (r *SystemCleanupRunner) Execute(ctx context.Context, task models.TaskConfi
 		// Get file info
 		info, err := d.Info()
 		if err != nil {
-			fmt.Fprintf(&output, "Error getting file info for %s: %v\n", path, err)
+			fmt.Fprintf(output, "Error getting file info for %s: %v\n", path, err)
 			return nil
 		}
 
@@ -550,11 +561,11 @@ func (r *SystemCleanupRunner) Execute(ctx context.Context, task models.TaskConfi
 		// Remove the file or directory
 		fileSize := info.Size()
 		if err := os.RemoveAll(path); err != nil {
-			fmt.Fprintf(&output, "Error removing %s: %v\n", path, err)
+			fmt.Fprintf(output, "Error removing %s: %v\n", path, err)
 		} else {
 			removedCount++
 			totalBytes += fileSize
-			fmt.Fprintf(&output, "Removed: %s (size: %d bytes)\n", path, fileSize)
+			fmt.Fprintf(output, "Removed: %s (size: %d bytes)\n", path, fileSize)
 
 			// If it's a directory, don't process its contents
 			if d.IsDir() {
