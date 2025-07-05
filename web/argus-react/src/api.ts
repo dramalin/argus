@@ -6,6 +6,10 @@ import type {
   TaskInfo,
   TaskExecution,
   AlertInfo,
+  AlertConfig,
+  AlertStatus,
+  AlertNotification,
+  AlertTestEvent,
   HealthStatus,
   ApiResponse,
   SystemMetrics,
@@ -249,45 +253,135 @@ class ArgusApiClient {
   }
 
   // Alert Management APIs
-  // TODO: Not currently used in UI, consider removal if no future Alert features planned
-  async getAlerts(): Promise<ApiResponse<AlertInfo[]>> {
-    return this.request<AlertInfo[]>('/api/alerts');
+  
+  /**
+   * Get all alerts
+   * @returns Promise with list of alert configurations
+   */
+  async getAlerts(): Promise<ApiResponse<AlertConfig[]>> {
+    return this.request<AlertConfig[]>('/api/alerts');
   }
 
-  // TODO: Not currently used in UI, consider removal if no future Alert features planned
-  async getAlert(id: string): Promise<ApiResponse<AlertInfo>> {
-    return this.request<AlertInfo>(`/api/alerts/${id}`);
+  /**
+   * Get a specific alert by ID
+   * @param id Alert ID
+   * @returns Promise with alert configuration
+   */
+  async getAlert(id: string): Promise<ApiResponse<AlertConfig>> {
+    return this.request<AlertConfig>(`/api/alerts/${id}`);
   }
 
-  // TODO: Not currently used in UI, consider removal if no future Alert features planned
-  async createAlert(alert: Partial<AlertInfo>): Promise<ApiResponse<AlertInfo>> {
-    return this.request<AlertInfo>('/api/alerts', {
+  /**
+   * Create a new alert
+   * @param alert Alert configuration
+   * @returns Promise with created alert configuration
+   */
+  async createAlert(alert: Partial<AlertConfig>): Promise<ApiResponse<AlertConfig>> {
+    return this.request<AlertConfig>('/api/alerts', {
       method: 'POST',
       body: JSON.stringify(alert),
     });
   }
 
-  // TODO: Not currently used in UI, consider removal if no future Alert features planned
-  async updateAlert(id: string, alert: Partial<AlertInfo>): Promise<ApiResponse<AlertInfo>> {
-    return this.request<AlertInfo>(`/api/alerts/${id}`, {
+  /**
+   * Update an existing alert
+   * @param id Alert ID
+   * @param alert Updated alert configuration
+   * @returns Promise with updated alert configuration
+   */
+  async updateAlert(id: string, alert: Partial<AlertConfig>): Promise<ApiResponse<AlertConfig>> {
+    return this.request<AlertConfig>(`/api/alerts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(alert),
     });
   }
 
-  // TODO: Not currently used in UI, consider removal if no future Alert features planned
+  /**
+   * Delete an alert
+   * @param id Alert ID
+   * @returns Promise with success/error
+   */
   async deleteAlert(id: string): Promise<ApiResponse<void>> {
     return this.request<void>(`/api/alerts/${id}`, {
       method: 'DELETE',
     });
   }
 
-  // Health Check API
-  // TODO: Not currently used in UI, consider removal if health check not planned for dashboard
+  /**
+   * Get status of all alerts
+   * @returns Promise with map of alert IDs to alert statuses
+   */
+  async getAllAlertStatus(): Promise<ApiResponse<Record<string, AlertStatus>>> {
+    return this.request<Record<string, AlertStatus>>('/api/alerts/status');
+  }
+
+  /**
+   * Get status of a specific alert
+   * @param id Alert ID
+   * @returns Promise with alert status
+   */
+  async getAlertStatus(id: string): Promise<ApiResponse<AlertStatus>> {
+    return this.request<AlertStatus>(`/api/alerts/${id}/status`);
+  }
+
+  /**
+   * Get all alert notifications
+   * @returns Promise with list of alert notifications
+   */
+  async getNotifications(): Promise<ApiResponse<AlertNotification[]>> {
+    return this.request<AlertNotification[]>('/api/notifications');
+  }
+
+  /**
+   * Mark a notification as read
+   * @param id Notification ID
+   * @returns Promise with success/error
+   */
+  async markNotificationRead(id: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`/api/notifications/${id}/read`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Mark all notifications as read
+   * @returns Promise with success/error
+   */
+  async markAllNotificationsRead(): Promise<ApiResponse<void>> {
+    return this.request<void>('/api/notifications/read-all', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Clear all notifications
+   * @returns Promise with success/error
+   */
+  async clearNotifications(): Promise<ApiResponse<void>> {
+    return this.request<void>('/api/notifications/clear', {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Test an alert by triggering it manually
+   * @param id Alert ID
+   * @returns Promise with test event details
+   */
+  async testAlert(id: string): Promise<ApiResponse<AlertTestEvent>> {
+    return this.request<AlertTestEvent>(`/api/alerts/${id}/test`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Get system health status
+   * @returns Promise with health status
+   */
   async getHealth(): Promise<ApiResponse<HealthStatus>> {
-    return this.request<HealthStatus>('/health');
+    return this.request<HealthStatus>('/api/health');
   }
 }
 
+// Create and export a singleton instance of the API client
 export const apiClient = new ArgusApiClient();
-export default apiClient;

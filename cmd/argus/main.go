@@ -20,14 +20,18 @@ import (
 	"argus/internal/models"
 	"argus/internal/server"
 	"argus/internal/services"
+	"argus/internal/utils"
 )
 
 // setupLogger configures structured logging
 func setupLogger() {
-	// Set up structured logging with JSON format for production
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	// Create a custom handler with a specific time format
+	handler := utils.NewCustomJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
-	}))
+	})
+
+	// Set up structured logging with the custom handler
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
 }
 

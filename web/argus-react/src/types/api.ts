@@ -111,7 +111,127 @@ export interface TaskExecution {
 }
 
 /**
+ * Metric type for alert monitoring
+ */
+export type MetricType = 'cpu' | 'memory' | 'load' | 'network' | 'disk' | 'process';
+
+/**
+ * Comparison operator for alert thresholds
+ */
+export type ComparisonOperator = '>' | '>=' | '<' | '<=' | '==' | '!=';
+
+/**
+ * Alert severity levels
+ */
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+
+/**
+ * Notification channel types
+ */
+export type NotificationType = 'in-app' | 'email';
+
+/**
+ * Alert state
+ */
+export type AlertState = 'active' | 'inactive' | 'pending' | 'resolved';
+
+/**
+ * Threshold configuration for alerts
+ */
+export interface ThresholdConfig {
+  /** Type of metric to monitor */
+  metric_type: MetricType;
+  /** Specific metric name within the type */
+  metric_name: string;
+  /** Comparison operator for threshold evaluation */
+  operator: ComparisonOperator;
+  /** Threshold value */
+  value: number;
+  /** Duration for sustained condition (milliseconds) */
+  duration?: number;
+  /** Number of consecutive evaluations required */
+  sustained_for?: number;
+}
+
+/**
+ * Notification configuration for alerts
+ */
+export interface NotificationConfig {
+  /** Type of notification */
+  type: NotificationType;
+  /** Whether this notification is enabled */
+  enabled: boolean;
+  /** Additional settings for the notification */
+  settings?: Record<string, any>;
+}
+
+/**
+ * Alert configuration
+ */
+export interface AlertConfig {
+  /** Unique identifier for the alert */
+  id: string;
+  /** Name of the alert */
+  name: string;
+  /** Optional description of the alert */
+  description?: string;
+  /** Whether the alert is enabled */
+  enabled: boolean;
+  /** Alert severity level */
+  severity: AlertSeverity;
+  /** Timestamp when the alert was created */
+  created_at: string;
+  /** Timestamp when the alert was last updated */
+  updated_at?: string;
+  /** Timestamp when the alert was last triggered */
+  triggered_at?: string;
+  /** Alert threshold configuration */
+  threshold: ThresholdConfig;
+  /** Alert notification settings */
+  notifications: NotificationConfig[];
+}
+
+/**
+ * Alert status information
+ */
+export interface AlertStatus {
+  /** ID of the alert */
+  alert_id: string;
+  /** Current state of the alert */
+  state: AlertState;
+  /** Current value of the monitored metric */
+  current_value: number;
+  /** When the alert was triggered (ISO format), if applicable */
+  triggered_at?: string;
+  /** When the alert was resolved (ISO format), if applicable */
+  resolved_at?: string;
+  /** Status message */
+  message?: string;
+}
+
+/**
+ * Alert notification
+ */
+export interface AlertNotification {
+  /** Unique identifier for the notification */
+  id: string;
+  /** ID of the alert that triggered this notification */
+  alert_id: string;
+  /** Alert name */
+  alert_name: string;
+  /** Notification message */
+  message: string;
+  /** Notification timestamp (ISO format) */
+  timestamp: string;
+  /** Whether the notification has been read */
+  read: boolean;
+  /** Alert severity level */
+  severity: AlertSeverity;
+}
+
+/**
  * Alert information returned by the API
+ * @deprecated Use AlertConfig instead for complete alert information
  */
 export interface AlertInfo {
   /** Unique identifier for the alert */
@@ -130,6 +250,30 @@ export interface AlertInfo {
   created_at: string;
   /** Last triggered timestamp (ISO format), if ever triggered */
   triggered_at?: string;
+}
+
+/**
+ * Alert test event response
+ */
+export interface AlertTestEvent {
+  /** ID of the alert */
+  alert_id: string;
+  /** Previous state */
+  old_state: AlertState;
+  /** New state */
+  new_state: AlertState;
+  /** Current value of the monitored metric */
+  current_value: number;
+  /** Threshold value */
+  threshold: number;
+  /** Event timestamp (ISO format) */
+  timestamp: string;
+  /** Event message */
+  message: string;
+  /** Alert configuration */
+  alert: AlertConfig;
+  /** Alert status */
+  status: AlertStatus;
 }
 
 /**
@@ -193,3 +337,6 @@ export interface WebSocketMessage {
   /** Timestamp of the message (ISO format) */
   timestamp: string;
 }
+
+// No need to re-export types that are already properly exported
+// The issue is likely with TypeScript configuration, not with the exports themselves
