@@ -1,10 +1,8 @@
 /**
  * Type definitions for React contexts
  */
-import { ReactNode } from 'react';
-import { SystemMetrics } from './api';
-import { ProcessInfo, ProcessResponse, ProcessQueryParams } from './process';
-import { AsyncData, ThemeMode, Notification } from './common';
+import type { ReactNode } from 'react';
+import type { SystemMetrics, ProcessInfo, ProcessResponse, ProcessQueryParams, AsyncData, ThemeMode, Notification } from './index';
 
 /**
  * State for the metrics context

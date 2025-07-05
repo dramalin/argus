@@ -150,6 +150,8 @@ class ArgusApiClient {
    */
   async getAllMetrics(): Promise<ApiResponse<SystemMetrics>> {
     try {
+      // TODO: Not currently used, consider removal if unified endpoint not implemented
+      /*
       // Try to use the unified endpoint first
       const unifiedResponse = await this.request<SystemMetrics>('/api/metrics');
       
@@ -157,6 +159,7 @@ class ArgusApiClient {
       if (unifiedResponse.success && unifiedResponse.data) {
         return unifiedResponse;
       }
+      */
       
       // Fall back to individual calls if unified endpoint fails or doesn't exist
       const [cpu, memory, network, processes] = await Promise.all([

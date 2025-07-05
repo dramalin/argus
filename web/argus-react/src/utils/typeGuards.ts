@@ -2,7 +2,7 @@
  * Type guard utilities for runtime type checking
  * @module TypeGuards
  */
-import { ProcessInfo, SystemMetrics } from '../types';
+import type { ProcessInfo, SystemMetrics } from '../types';
 
 /**
  * Type guard to check if a value is defined (not null or undefined)

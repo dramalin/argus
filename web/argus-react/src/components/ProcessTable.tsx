@@ -220,7 +220,7 @@ const ProcessTable: React.FC<ProcessTableProps> = ({
       </Box>
 
       {/* Virtualized Table */}
-      <Paper sx={{ mx: 2, mb: 2, height: 500, overflow: 'hidden' }}>
+      <Paper sx={{ mx: 2, mb: 2, height: 560, overflow: 'hidden' }}>
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           {/* Table Header */}
           <TableContainer component="div" sx={{ overflow: 'hidden' }}>
@@ -230,7 +230,7 @@ const ProcessTable: React.FC<ProcessTableProps> = ({
                   <TableCell component="div" style={{ flex: '0 0 80px' }}>PID</TableCell>
                   <TableCell component="div" style={{ flex: 1 }}>Name</TableCell>
                   <TableCell component="div" style={{ flex: '0 0 100px', textAlign: 'right' }}>CPU %</TableCell>
-                  <TableCell component="div" style={{ flex: '0 0 100px', textAlign: 'right' }}>Memory %</TableCell>
+                  <TableCell component="div" style={{ flex: '0 0 120px', textAlign: 'right' }}>Memory %</TableCell>
                 </TableRow>
               </TableHead>
             </Table>

@@ -1,9 +1,7 @@
 /**
  * Type definitions for custom React hooks
  */
-import { SystemMetrics, CPUInfo, MemoryInfo, NetworkInfo } from './api';
-import { ProcessInfo, ProcessResponse, ProcessQueryParams } from './process';
-import { AsyncData } from './common';
+import type { SystemMetrics, CPUInfo, MemoryInfo, NetworkInfo, ProcessInfo, ProcessResponse, ProcessQueryParams, AsyncData } from './index';
 
 /**
  * Return type for useMetrics hook
