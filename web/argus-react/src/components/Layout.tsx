@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   AppBar, 
   Toolbar, 
@@ -28,8 +29,6 @@ interface LayoutProps {
   children?: React.ReactNode;
 }
 
-// Removed unused TabPanel component
-
 // A11y props for tabs
 function a11yProps(index: number) {
   return {
@@ -39,25 +38,51 @@ function a11yProps(index: number) {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [value, setValue] = useState(0);
+  const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  
+  // Menu items with their corresponding routes
+  const menuItems = [
+    { text: 'Dashboard', icon: <DashboardIcon />, path: '/', index: 0 },
+    { text: 'Tasks', icon: <TaskIcon />, path: '/tasks', index: 1 },
+    { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts', index: 2 },
+    { text: 'Processes', icon: <TerminalIcon />, path: '/processes', index: 3 },
+  ];
+  
+  // Determine the active tab based on current location
+  const getActiveTabIndex = () => {
+    const currentPath = location.pathname;
+    const activeItem = menuItems.find(item => {
+      if (item.path === '/' && currentPath === '/') {
+        return true;
+      }
+      return currentPath.startsWith(item.path) && item.path !== '/';
+    });
+    return activeItem ? activeItem.index : 0;
+  };
+  
+  const activeTabIndex = getActiveTabIndex();
 
   const handleChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setValue(newValue);
+    const selectedItem = menuItems.find(item => item.index === newValue);
+    if (selectedItem) {
+      navigate(selectedItem.path);
+    }
   };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, index: 0 },
-    { text: 'Tasks', icon: <TaskIcon />, index: 1 },
-    { text: 'Alerts', icon: <NotificationsIcon />, index: 2 },
-    { text: 'Processes', icon: <TerminalIcon />, index: 3 },
-  ];
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+  };
 
   const drawer = (
     <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center' }}>
@@ -70,8 +95,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <ListItem 
             button 
             key={item.text} 
-            onClick={() => setValue(item.index)}
-            selected={value === item.index}
+            onClick={() => handleNavigation(item.path)}
+            selected={activeTabIndex === item.index}
             sx={{
               '&.Mui-selected': {
                 backgroundColor: theme.palette.primary.main,
@@ -122,7 +147,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Box>
           {!isMobile && (
             <Tabs 
-              value={value} 
+              value={activeTabIndex} 
               onChange={handleChange} 
               textColor="inherit"
               indicatorColor="secondary"

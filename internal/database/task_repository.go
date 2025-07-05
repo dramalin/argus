@@ -323,6 +323,11 @@ func (r *FileTaskRepository) writeTaskToFile(task *models.TaskConfig, filePath s
 	if err := enc.Encode(task); err != nil {
 		return fmt.Errorf("failed to encode task: %w", err)
 	}
+	err = f.Sync()
+	if err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+	fmt.Println("Task written to file:", filePath)
 	return nil
 }
 

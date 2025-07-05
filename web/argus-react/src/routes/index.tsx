@@ -7,7 +7,7 @@ import LoadingFallback from '../components/LoadingFallback';
 
 // Lazy-loaded route components
 const Dashboard = lazy(() => import('../Dashboard'));
-const Settings = lazy(() => import('./Settings'));
+const Processes = lazy(() => import('./Processes'));
 const Alerts = lazy(() => import('./Alerts'));
 const Tasks = lazy(() => import('./Tasks'));
 const NotFound = lazy(() => import('./NotFound'));
@@ -49,7 +49,7 @@ export const RouteComponent: React.FC<RouteComponentProps> = ({ component: Compo
 
 /**
  * Routes configuration
- * Currently not used, but prepared for future multi-page functionality
+ * Used for React Router navigation
  */
 export const routes: RouteConfig[] = [
   {
@@ -60,11 +60,11 @@ export const routes: RouteConfig[] = [
     icon: 'dashboard',
   },
   {
-    path: '/settings',
-    component: Settings,
-    label: 'Settings',
+    path: '/tasks',
+    component: Tasks,
+    label: 'Tasks',
     showInNav: true,
-    icon: 'settings',
+    icon: 'task',
   },
   {
     path: '/alerts',
@@ -74,11 +74,11 @@ export const routes: RouteConfig[] = [
     icon: 'notifications',
   },
   {
-    path: '/tasks',
-    component: Tasks,
-    label: 'Tasks',
+    path: '/processes',
+    component: Processes,
+    label: 'Processes',
     showInNav: true,
-    icon: 'assignment',
+    icon: 'terminal',
   },
   {
     path: '*',

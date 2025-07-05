@@ -53,6 +53,18 @@ export interface NetworkInfo {
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 /**
+ * Schedule information for tasks
+ */
+export interface Schedule {
+  /** Cron expression for recurring tasks */
+  cron_expression: string;
+  /** Whether this is a one-time task */
+  one_time: boolean;
+  /** Next scheduled execution time (ISO format) */
+  next_run_time: string;
+}
+
+/**
  * Task information returned by the API
  */
 export interface TaskInfo {
@@ -60,13 +72,17 @@ export interface TaskInfo {
   id: string;
   /** Task name */
   name: string;
-  /** Task type (e.g., 'cron', 'oneshot') */
+  /** Optional task description */
+  description?: string;
+  /** Task type (e.g., 'log_rotation', 'metrics_aggregation') */
   type: string;
   /** Whether the task is enabled */
   enabled: boolean;
-  /** Cron expression for scheduled tasks */
-  cron_expression?: string;
-  /** Current status of the task */
+  /** Schedule information */
+  schedule: Schedule;
+  /** Task-specific parameters */
+  parameters?: Record<string, string>;
+  /** Current status of the task (not in backend, but needed for UI) */
   status: TaskStatus;
   /** Creation timestamp (ISO format) */
   created_at: string;
