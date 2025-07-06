@@ -7,14 +7,17 @@
 package services
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/mock"
 
 	"argus/internal/models"
+	"argus/internal/server"
 )
 
 func TestNewNotifier(t *testing.T) {
@@ -230,31 +233,71 @@ func TestNewInAppChannel(t *testing.T) {
 	assert.Equal(t, 50, channel.maxSize)
 }
 
-func TestInAppChannelSend(t *testing.T) {
-	channel := NewInAppChannel(10)
-	event := createTestAlertEvent(t)
-	err := channel.Send(event, "Test Subject", "Test Body")
-	require.NoError(t, err)
-	notifications := channel.GetNotifications()
-	require.Len(t, notifications, 1)
-	assert.Equal(t, event.AlertID, notifications[0].AlertID)
-	assert.Equal(t, event.Alert.Name, notifications[0].AlertName)
-	assert.Equal(t, "Test Subject", notifications[0].Subject)
-	assert.Equal(t, "Test Body", notifications[0].Message)
-	assert.Equal(t, event.Alert.Severity, notifications[0].Severity)
-	assert.Equal(t, event.NewState, notifications[0].State)
-	assert.False(t, notifications[0].Read)
+// MockHub is a mock implementation of the Hub
+type MockHub struct {
+	mock.Mock
 }
 
-func TestInAppChannelMaxSize(t *testing.T) {
-	channel := NewInAppChannel(3)
-	event := createTestAlertEvent(t)
-	for i := 0; i < 5; i++ {
-		err := channel.Send(event, "Test Subject", "Test Body")
-		require.NoError(t, err)
+func (m *MockHub) Broadcast(message []byte) {
+	m.Called(message)
+}
+
+func (m *MockHub) Run() {
+	// No-op for testing
+}
+
+func TestInAppChannel_Send(t *testing.T) {
+	// Setup
+	mockHub := new(MockHub)
+	channel := NewInAppChannel(5, mockHub)
+
+	event := models.AlertEvent{
+		Alert: &models.AlertConfig{ID: "alert-1"},
 	}
+	subject := "Test Subject"
+	body := "Test Body"
+
+	// Expected notification
+	var capturedNotification models.InAppNotification
+	mockHub.On("Broadcast", mock.Anything).Run(func(args mock.Arguments) {
+		msgBytes := args.Get(0).([]byte)
+		json.Unmarshal(msgBytes, &capturedNotification)
+	}).Return()
+
+	// Action
+	err := channel.Send(event, subject, body)
+
+	// Assertions
+	assert.NoError(t, err)
+	mockHub.AssertCalled(t, "Broadcast", mock.Anything)
+
+	assert.Equal(t, "alert-1", capturedNotification.AlertID)
+	assert.Equal(t, subject, capturedNotification.Subject)
+	assert.Equal(t, body, capturedNotification.Body)
+	assert.False(t, capturedNotification.IsRead)
+
+	// Verify in-memory store
 	notifications := channel.GetNotifications()
-	assert.Len(t, notifications, 3)
+	assert.Len(t, notifications, 1)
+	assert.Equal(t, capturedNotification.ID, notifications[0].ID)
+}
+
+func TestInAppChannel_MaxSize(t *testing.T) {
+	mockHub := new(MockHub)
+	channel := NewInAppChannel(2, mockHub)
+	mockHub.On("Broadcast", mock.Anything).Return()
+
+	// Send 3 notifications
+	channel.Send(models.AlertEvent{Alert: &models.AlertConfig{ID: "1"}}, "s1", "b1")
+	time.Sleep(1 * time.Millisecond) // Ensure unique timestamps
+	channel.Send(models.AlertEvent{Alert: &models.AlertConfig{ID: "2"}}, "s2", "b2")
+	time.Sleep(1 * time.Millisecond)
+	channel.Send(models.AlertEvent{Alert: &models.AlertConfig{ID: "3"}}, "s3", "b3")
+
+	notifications := channel.GetNotifications()
+	assert.Len(t, notifications, 2)
+	assert.Equal(t, "2", notifications[0].AlertID) // Oldest (1) should be gone
+	assert.Equal(t, "3", notifications[1].AlertID)
 }
 
 func TestInAppChannelGetUnreadNotifications(t *testing.T) {

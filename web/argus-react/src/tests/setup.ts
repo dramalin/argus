@@ -3,6 +3,10 @@ import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import React from 'react';
 
+// This is a temporary workaround for the "act" warning in tests.
+// It should be removed once the issue is resolved in react-testing-library.
+(global as any).IS_REACT_ACT_ENVIRONMENT = true;
+
 // Extend matchers
 declare global {
   namespace Vi {
@@ -43,8 +47,9 @@ vi.mock('react-chartjs-2', () => ({
 vi.mock('react-window', () => ({
   FixedSizeList: ({ children, itemCount, itemData }: any) => {
     const items = [];
+    const Child = children;
     for (let i = 0; i < Math.min(itemCount, 10); i++) {
-      items.push(children({ index: i, style: {}, data: itemData }));
+      items.push(React.createElement(Child, { index: i, style: {}, data: itemData }));
     }
     return React.createElement('div', { 'data-testid': 'virtualized-list' }, items);
   },

@@ -1,5 +1,7 @@
 import { useUiContext } from '../context/UiContext';
 import type { NotificationSeverity, UseNotificationResult } from '../types/hooks';
+import type { InAppNotification } from '../types/api';
+import useWebSocket from './useWebSocket';
 
 /**
  * Hook for managing notifications
@@ -8,19 +10,23 @@ import type { NotificationSeverity, UseNotificationResult } from '../types/hooks
  * @returns Object with notification management functions
  */
 export function useNotification(): UseNotificationResult {
-  const { addNotification, removeNotification, clearNotifications } = useUiContext();
+  const { addNotification } = useUiContext();
+
+  const handleWebSocketMessage = (data: InAppNotification) => {
+    showNotification(data.subject, data.severity);
+  };
   
-  /**
-   * Show a notification with the specified message and severity
-   * @param message The notification message
-   * @param severity The severity level (success, error, info, warning)
-   */
+  const wsUrl = `ws://${window.location.host}/ws`;
+  useWebSocket({
+    url: wsUrl,
+    onMessage: handleWebSocketMessage,
+  });
+
   const showNotification = (message: string, severity: NotificationSeverity) => {
     addNotification(message, severity);
   };
   
   return {
     showNotification,
-    clearNotifications,
   };
 } 

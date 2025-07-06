@@ -10,6 +10,7 @@ package services
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -23,7 +24,10 @@ import (
 	"argus/internal/utils"
 )
 
-// ... (migrated and refactored code from notifier.go, email.go, inapp.go goes here) ...
+// Broadcaster defines the interface for broadcasting messages, typically via WebSocket.
+type Broadcaster interface {
+	Broadcast(message []byte)
+}
 
 // NotificationTemplate represents a template for notification messages
 type NotificationTemplate struct {
@@ -136,8 +140,6 @@ Description: {{ .Alert.Description }}
 		},
 	},
 }
-
-// ... (NotifierConfig, Notifier, NotificationChannel, EmailChannel, InAppChannel, and all related methods and helpers migrated here) ...
 
 // NotifierConfig holds configuration for the notifier
 type NotifierConfig struct {
@@ -713,24 +715,25 @@ type InAppChannel struct {
 	notifications []models.InAppNotification
 	maxSize       int
 	mu            sync.RWMutex
+	hub           Broadcaster
 }
 
-func NewInAppChannel(maxSize int) *InAppChannel {
-	if maxSize <= 0 {
-		maxSize = 100
-	}
+func NewInAppChannel(maxSize int, hub Broadcaster) *InAppChannel {
 	return &InAppChannel{
 		notifications: make([]models.InAppNotification, 0, maxSize),
 		maxSize:       maxSize,
+		hub:           hub,
 	}
 }
 
 func (c *InAppChannel) Send(event models.AlertEvent, subject, body string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Create notification and broadcast via WebSocket hub
 	notification := models.InAppNotification{
 		ID:        generateID(),
-		AlertID:   event.AlertID,
+		AlertID:   event.Alert.ID,
 		AlertName: event.Alert.Name,
 		Severity:  event.Alert.Severity,
 		State:     event.NewState,
@@ -739,10 +742,22 @@ func (c *InAppChannel) Send(event models.AlertEvent, subject, body string) error
 		Timestamp: time.Now(),
 		Read:      false,
 	}
-	c.notifications = append([]models.InAppNotification{notification}, c.notifications...)
-	if len(c.notifications) > c.maxSize {
-		c.notifications = c.notifications[:c.maxSize]
+
+	// Add to internal list (and cap size)
+	if len(c.notifications) >= c.maxSize {
+		// Remove the oldest notification
+		c.notifications = c.notifications[1:]
 	}
+	c.notifications = append(c.notifications, notification)
+
+	// Broadcast to WebSocket clients
+	msgBytes, err := json.Marshal(notification)
+	if err != nil {
+		return fmt.Errorf("failed to marshal in-app notification: %w", err)
+	}
+
+	c.hub.Broadcast(msgBytes)
+
 	return nil
 }
 

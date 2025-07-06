@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
   TableRow,
   Chip,
   Button,
@@ -38,8 +38,8 @@ import AddIcon from '@mui/icons-material/Add';
 import { apiClient } from '../api';
 import type { TaskInfo, TaskStatus, TaskExecution } from '../types/api';
 import LoadingErrorHandler from '../components/LoadingErrorHandler';
-import { PageHeader, ConfirmDialog } from '../components/common';
-import { useNotification, useDataFetching, useDialogState, useDateFormatter } from '../hooks';
+import { PageHeader, ConfirmDialog, StatusChip, type StatusConfig } from '../components/common';
+import { useNotification, useDateFormatter, useResourceCRUD } from '../hooks';
 
 // Task type options for the form
 const TASK_TYPES = [
@@ -49,42 +49,55 @@ const TASK_TYPES = [
   { value: 'system_cleanup', label: 'System Cleanup' }
 ];
 
+// Define status map for StatusChip
+const TASK_STATUS_MAP: Record<string, StatusConfig> = {
+  'pending': { label: 'Pending', color: 'info' },
+  'running': { label: 'Running', color: 'primary' },
+  'completed': { label: 'Completed', color: 'success' },
+  'failed': { label: 'Failed', color: 'error' },
+};
+
 /**
  * Tasks page component
  * Displays system tasks and allows management
  */
 const Tasks: React.FC = () => {
-  // Use the data fetching hook for tasks
-  const { data, loading, error, lastUpdated, refetch } = useDataFetching<TaskInfo[]>(
-    'tasks',
-    apiClient.getTasks,
-    { cacheTTL: 30000 }
-  );
-  
-  // Ensure tasks is never null
-  const tasks = data || [];
-  
+  // Use the useResourceCRUD hook for task management
+  const {
+    items: tasks,
+    loading,
+    error,
+    lastUpdated,
+    refetch,
+    actionLoading,
+    selectedItem: selectedTask,
+    setSelectedItem: setSelectedTask,
+    isDialogOpen,
+    openDialog,
+    closeDialog,
+    handleCreate,
+    handleDelete,
+  } = useResourceCRUD<TaskInfo, Partial<TaskInfo>, Partial<TaskInfo>>({
+    resourceName: 'task',
+    fetchFn: apiClient.getTasks,
+    createFn: apiClient.createTask,
+    deleteFn: apiClient.deleteTask,
+    cacheTTL: 30000,
+  });
+
   // Use the notification hook for managing notifications
   const { showNotification } = useNotification();
-  
+
   // Use the date formatter hook for consistent date formatting
   const { formatDate } = useDateFormatter();
-  
-  // Use the dialog state hook for managing multiple dialogs
-  const { 
-    openDialog, 
-    closeDialog, 
-    isDialogOpen 
-  } = useDialogState<'create' | 'delete' | 'executions'>();
-  
-  // State for task operations
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  // State for task executions dialog
   const [taskExecutions, setTaskExecutions] = useState<TaskExecution[]>([]);
   const [executionsLoading, setExecutionsLoading] = useState<boolean>(false);
   const [executionsError, setExecutionsError] = useState<string | null>(null);
   
   // State for create task dialog
-  const [newTask, setNewTask] = useState<Partial<TaskInfo> & { type: string }>({
+  const [newTask, setNewTask] = useState<Partial<TaskInfo>>({
     name: '',
     type: 'health_check',
     enabled: true,
@@ -94,79 +107,6 @@ const Tasks: React.FC = () => {
       next_run_time: new Date().toISOString()
     }
   });
-  const [createTaskLoading, setCreateTaskLoading] = useState<boolean>(false);
-
-  // Function to get a specific task
-  const getTask = useCallback(async (id: string) => {
-    try {
-      const response = await apiClient.getTask(id);
-      
-      if (response.success && response.data) {
-        return response.data;
-      } else {
-        throw new Error(response.error || 'Failed to fetch task');
-      }
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'An unknown error occurred');
-    }
-  }, []);
-
-  // Function to create a new task
-  const createTask = useCallback(async (task: Partial<TaskInfo>) => {
-    setCreateTaskLoading(true);
-    
-    try {
-      const response = await apiClient.createTask(task);
-      
-      if (response.success && response.data) {
-        showNotification('Task created successfully', 'success');
-        await refetch(); // Refresh the task list
-        closeDialog('create');
-        // Reset the form
-        setNewTask({
-          name: '',
-          type: 'health_check',
-          enabled: true,
-          schedule: {
-            cron_expression: '0 * * * *',
-            one_time: false,
-            next_run_time: new Date().toISOString()
-          }
-        });
-      } else {
-        throw new Error(response.error || 'Failed to create task');
-      }
-    } catch (err) {
-      showNotification(
-        err instanceof Error ? err.message : 'Failed to create task',
-        'error'
-      );
-    } finally {
-      setCreateTaskLoading(false);
-    }
-  }, [refetch, closeDialog, showNotification]);
-
-  // Function to delete a task
-  const deleteTask = useCallback(async (id: string) => {
-    try {
-      const response = await apiClient.deleteTask(id);
-      
-      if (response.success) {
-        showNotification('Task deleted successfully', 'success');
-        await refetch(); // Refresh the task list
-      } else {
-        throw new Error(response.error || 'Failed to delete task');
-      }
-    } catch (err) {
-      showNotification(
-        err instanceof Error ? err.message : 'Failed to delete task',
-        'error'
-      );
-    } finally {
-      closeDialog('delete');
-      setSelectedTaskId(null);
-    }
-  }, [refetch, closeDialog, showNotification]);
 
   // Function to run a task immediately
   const runTask = useCallback(async (id: string) => {
@@ -223,21 +163,32 @@ const Tasks: React.FC = () => {
 
   // Handle opening executions dialog
   const handleViewExecutions = useCallback((id: string) => {
-    setSelectedTaskId(id);
+    setSelectedTask(tasks.find(task => task.id === id) || null);
     getTaskExecutions(id);
     openDialog('executions');
-  }, [getTaskExecutions, openDialog]);
+  }, [getTaskExecutions, openDialog, tasks, setSelectedTask]);
 
   // Handle opening create task dialog
   const handleOpenCreateDialog = useCallback(() => {
+    setSelectedTask(null);
+    setNewTask({
+      name: '',
+      type: 'health_check',
+      enabled: true,
+      schedule: {
+        cron_expression: '0 * * * *',
+        one_time: false,
+        next_run_time: new Date().toISOString()
+      }
+    });
     openDialog('create');
-  }, [openDialog]);
+  }, [openDialog, setSelectedTask]);
 
   // Handle form field changes
   const handleNewTaskChange = useCallback((field: string, value: string | boolean) => {
     if (field === 'cron_expression') {
       // Handle cron_expression field which is now inside schedule
-      setNewTask(prev => ({
+      setNewTask((prev: Partial<TaskInfo>) => ({
         ...prev,
         schedule: {
           ...prev.schedule!,
@@ -246,7 +197,7 @@ const Tasks: React.FC = () => {
       }));
     } else if (field === 'one_time') {
       // Handle one_time field which is now inside schedule
-      setNewTask(prev => ({
+      setNewTask((prev: Partial<TaskInfo>) => ({
         ...prev,
         schedule: {
           ...prev.schedule!,
@@ -255,7 +206,7 @@ const Tasks: React.FC = () => {
       }));
     } else {
       // Handle other fields directly on the task object
-      setNewTask(prev => ({
+      setNewTask((prev: Partial<TaskInfo>) => ({
         ...prev,
         [field]: value
       }));
@@ -263,31 +214,27 @@ const Tasks: React.FC = () => {
   }, []);
 
   // Handle form submission
-  const handleCreateTask = useCallback((e: React.FormEvent) => {
+  const handleCreateTask = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    createTask(newTask);
-  }, [createTask, newTask]);
+    await handleCreate(newTask as TaskInfo); // Cast to TaskInfo
+    closeDialog('create');
+    setNewTask({
+      name: '',
+      type: 'health_check',
+      enabled: true,
+      schedule: {
+        cron_expression: '0 * * * *',
+        one_time: false,
+        next_run_time: new Date().toISOString()
+      }
+    });
+  }, [handleCreate, newTask, closeDialog]);
 
-  // Function to render status chip with appropriate color
-  const renderStatusChip = (status: TaskStatus) => {
-    let color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' = 'default';
-    
-    switch (status) {
-      case 'pending':
-        color = 'info';
-        break;
-      case 'running':
-        color = 'primary';
-        break;
-      case 'completed':
-        color = 'success';
-        break;
-      case 'failed':
-        color = 'error';
-        break;
-    }
-    
-    return <Chip label={status} color={color} size="small" />;
+  // Handle deleting a task
+  const handleConfirmDelete = async () => {
+    if (!selectedTask) return;
+    await handleDelete(selectedTask.id);
+    setSelectedTask(null);
   };
 
   // Define page header actions
@@ -313,13 +260,15 @@ const Tasks: React.FC = () => {
     </>
   );
 
+  const formattedLastUpdated = lastUpdated ? formatDate(lastUpdated.toISOString()) : null;
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Use the PageHeader component */}
       <PageHeader
         title="System Tasks"
         description="View and manage scheduled system tasks. Tasks can be enabled, disabled, or manually triggered."
-        lastUpdated={lastUpdated}
+        lastUpdated={formattedLastUpdated}
         actions={headerActions}
         loading={loading}
       />
@@ -362,7 +311,7 @@ const Tasks: React.FC = () => {
                       <TableRow key={task.id}>
                         <TableCell>{task.name}</TableCell>
                         <TableCell>{task.type}</TableCell>
-                        <TableCell>{renderStatusChip(task.status)}</TableCell>
+                        <TableCell><StatusChip status={task.status} statusMap={TASK_STATUS_MAP} /></TableCell>
                         <TableCell>{formatDate(task.created_at)}</TableCell>
                         <TableCell>
                           <Chip 
@@ -378,6 +327,7 @@ const Tasks: React.FC = () => {
                                 size="small" 
                                 color="primary"
                                 onClick={() => runTask(task.id)}
+                                disabled={actionLoading}
                               >
                                 <PlayArrowIcon fontSize="small" />
                               </IconButton>
@@ -398,7 +348,9 @@ const Tasks: React.FC = () => {
                                 onClick={() => {
                                   // This would be implemented in a future feature with a form dialog
                                   console.log('Edit task:', task.id);
+                                  showNotification('Edit functionality not yet implemented', 'info');
                                 }}
+                                disabled={actionLoading}
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
@@ -408,9 +360,10 @@ const Tasks: React.FC = () => {
                                 size="small" 
                                 color="error"
                                 onClick={() => {
-                                  setSelectedTaskId(task.id);
+                                  setSelectedTask(task);
                                   openDialog('delete');
                                 }}
+                                disabled={actionLoading}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
@@ -430,7 +383,7 @@ const Tasks: React.FC = () => {
       {/* Create Task Dialog */}
       <Dialog 
         open={isDialogOpen('create')} 
-        onClose={() => !createTaskLoading && closeDialog('create')}
+        onClose={() => !actionLoading && closeDialog('create')}
         maxWidth="md"
         fullWidth
       >
@@ -445,17 +398,17 @@ const Tasks: React.FC = () => {
                   label="Task Name"
                   value={newTask.name}
                   onChange={(e) => handleNewTaskChange('name', e.target.value)}
-                  disabled={createTaskLoading}
+                  disabled={actionLoading}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Task Type</InputLabel>
                   <Select<string>
-                    value={newTask.type}
+                    value={newTask.type || ''}
                     label="Task Type"
                     onChange={(e) => handleNewTaskChange('type', e.target.value)}
-                    disabled={createTaskLoading}
+                    disabled={actionLoading}
                   >
                     {TASK_TYPES.map(option => (
                       <MenuItem key={option.value} value={option.value}>
@@ -471,7 +424,7 @@ const Tasks: React.FC = () => {
                   label="Cron Expression"
                   value={newTask.schedule?.cron_expression || ''}
                   onChange={(e) => handleNewTaskChange('cron_expression', e.target.value)}
-                  disabled={createTaskLoading}
+                  disabled={actionLoading}
                   helperText="e.g., '0 * * * *' for hourly execution"
                 />
               </Grid>
@@ -481,7 +434,7 @@ const Tasks: React.FC = () => {
                     <Switch
                       checked={!!newTask.schedule?.one_time}
                       onChange={(e) => handleNewTaskChange('one_time', e.target.checked)}
-                      disabled={createTaskLoading}
+                      disabled={actionLoading}
                     />
                   }
                   label="One-time task"
@@ -493,7 +446,7 @@ const Tasks: React.FC = () => {
                     <Switch
                       checked={!!newTask.enabled}
                       onChange={(e) => handleNewTaskChange('enabled', e.target.checked)}
-                      disabled={createTaskLoading}
+                      disabled={actionLoading}
                     />
                   }
                   label="Enabled"
@@ -504,7 +457,7 @@ const Tasks: React.FC = () => {
           <DialogActions>
             <Button 
               onClick={() => closeDialog('create')} 
-              disabled={createTaskLoading}
+              disabled={actionLoading}
             >
               Cancel
             </Button>
@@ -512,9 +465,9 @@ const Tasks: React.FC = () => {
               type="submit" 
               variant="contained" 
               color="primary"
-              disabled={createTaskLoading || !newTask.name || !newTask.type}
+              disabled={actionLoading || !newTask.name || !newTask.type}
             >
-              {createTaskLoading ? 'Creating...' : 'Create Task'}
+              {actionLoading ? 'Creating...' : 'Create Task'}
             </Button>
           </DialogActions>
         </form>
@@ -524,12 +477,13 @@ const Tasks: React.FC = () => {
       <ConfirmDialog
         open={isDialogOpen('delete')}
         onClose={() => closeDialog('delete')}
-        onConfirm={() => selectedTaskId && deleteTask(selectedTaskId)}
+        onConfirm={handleConfirmDelete}
         title="Delete Task"
-        message="Are you sure you want to delete this task? This action cannot be undone."
+        message={`Are you sure you want to delete the task \"${selectedTask?.name}\"? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         severity="error"
+        loading={actionLoading}
       />
 
       {/* Task Executions Dialog */}
@@ -563,7 +517,7 @@ const Tasks: React.FC = () => {
                     {taskExecutions.map((execution) => (
                       <TableRow key={execution.id}>
                         <TableCell>{execution.id}</TableCell>
-                        <TableCell>{renderStatusChip(execution.status)}</TableCell>
+                        <TableCell><StatusChip status={execution.status} statusMap={TASK_STATUS_MAP} /></TableCell>
                         <TableCell>{formatDate(execution.start_time)}</TableCell>
                         <TableCell>{execution.end_time ? formatDate(execution.end_time) : 'N/A'}</TableCell>
                         <TableCell>

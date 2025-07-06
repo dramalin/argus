@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import useDebounce from './useDebounce';
 
 describe('useDebounce', () => {
@@ -36,10 +36,14 @@ describe('useDebounce', () => {
     );
 
     // Change the value
-    rerender({ value: 'updated value', delay: 500 });
+    act(() => {
+      rerender({ value: 'updated value', delay: 500 });
+    });
 
     // Fast-forward time by 500ms (equal to the delay)
-    vi.advanceTimersByTime(500);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
     expect(result.current).toBe('updated value');
   });
 
@@ -50,21 +54,29 @@ describe('useDebounce', () => {
     );
 
     // First update
-    rerender({ value: 'update 1', delay: 500 });
-    vi.advanceTimersByTime(200);
+    act(() => {
+      rerender({ value: 'update 1', delay: 500 });
+      vi.advanceTimersByTime(200);
+    });
 
     // Second update before the first one completes
-    rerender({ value: 'update 2', delay: 500 });
-    vi.advanceTimersByTime(200);
+    act(() => {
+      rerender({ value: 'update 2', delay: 500 });
+      vi.advanceTimersByTime(200);
+    });
 
     // Third update before the second one completes
-    rerender({ value: 'update 3', delay: 500 });
+    act(() => {
+      rerender({ value: 'update 3', delay: 500 });
+    });
     
-    // Value should still be the initial one
+    // Value should still be the initial one before final advance
     expect(result.current).toBe('initial value');
 
     // Fast-forward time to complete the last update
-    vi.advanceTimersByTime(500);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
     expect(result.current).toBe('update 3');
   });
 
@@ -75,14 +87,20 @@ describe('useDebounce', () => {
     );
 
     // Change the value and the delay
-    rerender({ value: 'updated value', delay: 1000 });
+    act(() => {
+      rerender({ value: 'updated value', delay: 1000 });
+    });
 
     // Fast-forward time by 500ms (equal to the original delay)
-    vi.advanceTimersByTime(500);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
     expect(result.current).toBe('initial value');
 
     // Fast-forward time by another 500ms (to reach the new delay)
-    vi.advanceTimersByTime(500);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
     expect(result.current).toBe('updated value');
   });
 

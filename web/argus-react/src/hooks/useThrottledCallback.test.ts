@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import useThrottledCallback from './useThrottledCallback';
 
 describe('useThrottledCallback', () => {
@@ -11,7 +11,9 @@ describe('useThrottledCallback', () => {
     const callback = vi.fn();
     const { result } = renderHook(() => useThrottledCallback(callback, 200));
     
-    result.current('test');
+    act(() => {
+      result.current('test');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith('test');
   });
@@ -21,16 +23,22 @@ describe('useThrottledCallback', () => {
     const { result } = renderHook(() => useThrottledCallback(callback, 200));
     
     // First call - immediate
-    result.current('test1');
+    act(() => {
+      result.current('test1');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith('test1');
     
     // Second call before delay - should not trigger callback
-    result.current('test2');
+    act(() => {
+      result.current('test2');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     
     // Third call before delay - should not trigger callback
-    result.current('test3');
+    act(() => {
+      result.current('test3');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
@@ -39,17 +47,25 @@ describe('useThrottledCallback', () => {
     const { result } = renderHook(() => useThrottledCallback(callback, 200));
     
     // First call - immediate
-    result.current('test1');
+    act(() => {
+      result.current('test1');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     
     // Second call before delay
-    result.current('test2');
+    act(() => {
+      result.current('test2');
+    });
     
     // Third call before delay
-    result.current('test3');
+    act(() => {
+      result.current('test3');
+    });
     
     // Advance timers
-    vi.advanceTimersByTime(200);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     
     // Should have called with the latest arguments
     expect(callback).toHaveBeenCalledTimes(2);
@@ -61,15 +77,21 @@ describe('useThrottledCallback', () => {
     const { result } = renderHook(() => useThrottledCallback(callback, 200));
     
     // First call - immediate
-    result.current('test', 123, { key: 'value' });
+    act(() => {
+      result.current('test', 123, { key: 'value' });
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith('test', 123, { key: 'value' });
     
     // Second call before delay
-    result.current('updated', 456, { key: 'new value' });
+    act(() => {
+      result.current('updated', 456, { key: 'new value' });
+    });
     
     // Advance timers
-    vi.advanceTimersByTime(200);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     
     // Should have called with the latest arguments
     expect(callback).toHaveBeenCalledTimes(2);
@@ -81,29 +103,43 @@ describe('useThrottledCallback', () => {
     const { result } = renderHook(() => useThrottledCallback(callback, 200));
     
     // First call - immediate
-    result.current('test1');
+    act(() => {
+      result.current('test1');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     
     // Second call before delay
-    result.current('test2');
+    act(() => {
+      result.current('test2');
+    });
     
     // Advance timers partially
-    vi.advanceTimersByTime(100);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     
     // Third call
-    result.current('test3');
+    act(() => {
+      result.current('test3');
+    });
     
     // Advance timers to complete first throttle
-    vi.advanceTimersByTime(100);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
     expect(callback).toHaveBeenCalledTimes(2);
     expect(callback).toHaveBeenCalledWith('test3');
     
     // Fourth call
-    result.current('test4');
+    act(() => {
+      result.current('test4');
+    });
     
     // Advance timers to complete second throttle
-    vi.advanceTimersByTime(200);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     expect(callback).toHaveBeenCalledTimes(3);
     expect(callback).toHaveBeenCalledWith('test4');
   });
@@ -113,20 +149,29 @@ describe('useThrottledCallback', () => {
     const callback2 = vi.fn();
     
     const { result, rerender } = renderHook(
-      ({ callback }) => useThrottledCallback(callback, 200),
-      { initialProps: { callback: callback1 } }
+      ({ callback, delay }) => useThrottledCallback(callback, delay),
+      { initialProps: { callback: callback1, delay: 200 } }
     );
     
     // Call with first callback
-    result.current('test1');
+    act(() => {
+      result.current('test1');
+    });
     expect(callback1).toHaveBeenCalledTimes(1);
     expect(callback2).toHaveBeenCalledTimes(0);
     
     // Update the callback
-    rerender({ callback: callback2 });
+    act(() => {
+      rerender({ callback: callback2, delay: 200 });
+    });
     
-    // Call with second callback
-    result.current('test2');
+    // Call with second callback after delay
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    act(() => {
+      result.current('test2');
+    });
     expect(callback1).toHaveBeenCalledTimes(1);
     expect(callback2).toHaveBeenCalledTimes(1);
   });
@@ -140,26 +185,38 @@ describe('useThrottledCallback', () => {
     );
     
     // First call - immediate
-    result.current('test1');
+    act(() => {
+      result.current('test1');
+    });
     expect(callback).toHaveBeenCalledTimes(1);
     
     // Second call before delay
-    result.current('test2');
+    act(() => {
+      result.current('test2');
+    });
     
     // Update the delay
-    rerender({ delay: 500 });
+    act(() => {
+      rerender({ delay: 500 });
+    });
     
     // Third call
-    result.current('test3');
+    act(() => {
+      result.current('test3');
+    });
     
     // Advance timers to what would have been the first delay
-    vi.advanceTimersByTime(200);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     
     // Should not have called yet due to new longer delay
     expect(callback).toHaveBeenCalledTimes(1);
     
     // Advance timers to complete the new delay
-    vi.advanceTimersByTime(300);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(callback).toHaveBeenCalledTimes(2);
     expect(callback).toHaveBeenCalledWith('test3');
   });

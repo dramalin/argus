@@ -7,9 +7,16 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
 import { routes, RouteComponent } from './routes';
 import './App.css';
+import { useNotification } from './hooks';
 
 // Lazy-loaded components
 const Layout = lazy(() => import('./components/Layout'));
+
+// A component to handle notifications
+const NotificationHandler: React.FC = () => {
+  useNotification();
+  return null;
+};
 
 /**
  * Root application component
@@ -22,6 +29,7 @@ function App(): React.ReactElement {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AppProvider>
+          <NotificationHandler />
           <BrowserRouter>
             <Suspense fallback={<LoadingFallback message="Loading application..." contained={false} />}>
               <Layout>

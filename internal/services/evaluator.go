@@ -372,12 +372,11 @@ func (e *Evaluator) generateEvent(oldState, newState models.AlertState, currentV
 }
 
 func (e *Evaluator) evaluateMetric(threshold models.ThresholdConfig) (float64, error) {
-	// Use centralized metrics collector if available
+	// Prioritize collector if available
 	if e.metricsCollector != nil {
 		return e.evaluateMetricFromCollector(threshold)
 	}
-
-	// Fallback to direct evaluation (for backward compatibility)
+	// Fallback to direct evaluation (for testing or legacy reasons)
 	return e.evaluateMetricDirect(threshold)
 }
 
@@ -386,34 +385,52 @@ func (e *Evaluator) evaluateMetricFromCollector(threshold models.ThresholdConfig
 	case models.MetricCPU:
 		cpuMetrics := e.metricsCollector.GetCPUMetrics()
 		if cpuMetrics == nil {
-			return 0, fmt.Errorf("CPU metrics not available from collector")
+			return 0, fmt.Errorf("cpu metrics not available")
 		}
 		return e.extractCPUValue(cpuMetrics, threshold.MetricName)
-
 	case models.MetricMemory:
 		memoryMetrics := e.metricsCollector.GetMemoryMetrics()
 		if memoryMetrics == nil {
-			return 0, fmt.Errorf("memory metrics not available from collector")
+			return 0, fmt.Errorf("memory metrics not available")
 		}
 		return e.extractMemoryValue(memoryMetrics, threshold.MetricName)
-
-	case models.MetricLoad:
-		cpuMetrics := e.metricsCollector.GetCPUMetrics()
-		if cpuMetrics == nil {
-			return 0, fmt.Errorf("load metrics not available from collector")
-		}
-		return e.extractLoadValue(cpuMetrics, threshold.MetricName)
-
 	case models.MetricNetwork:
 		networkMetrics := e.metricsCollector.GetNetworkMetrics()
 		if networkMetrics == nil {
-			return 0, fmt.Errorf("network metrics not available from collector")
+			return 0, fmt.Errorf("network metrics not available")
 		}
 		return e.extractNetworkValue(networkMetrics, threshold.MetricName)
-
+	case models.MetricProcess:
+		processMetrics := e.metricsCollector.GetProcessMetrics()
+		if processMetrics == nil {
+			return 0, fmt.Errorf("process metrics not available")
+		}
+		return e.extractProcessValue(processMetrics.Processes, threshold)
 	default:
-		return 0, fmt.Errorf("unsupported metric type: %s", threshold.MetricType)
+		return 0, fmt.Errorf("unsupported metric type for collector: %s", threshold.MetricType)
 	}
+}
+
+func (e *Evaluator) extractProcessValue(processes []metrics.ProcessInfo, threshold models.ThresholdConfig) (float64, error) {
+	if threshold.Target == nil || *threshold.Target == "" {
+		return 0, fmt.Errorf("process alert requires a target (name or PID)")
+	}
+
+	for _, p := range processes {
+		// Match by process name if provided, otherwise by PID
+		if p.Name == *threshold.Target || fmt.Sprintf("%d", p.PID) == *threshold.Target {
+			switch threshold.MetricName {
+			case "cpu_percent":
+				return p.CPUPercent, nil
+			case "memory_percent":
+				return float64(p.MemPercent), nil
+			default:
+				return 0, fmt.Errorf("unsupported metric for process: %s", threshold.MetricName)
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("process not found: %s", *threshold.Target)
 }
 
 func (e *Evaluator) extractCPUValue(cpuMetrics *metrics.CPUMetrics, metricName string) (float64, error) {
@@ -441,19 +458,6 @@ func (e *Evaluator) extractMemoryValue(memoryMetrics *metrics.MemoryMetrics, met
 		return float64(memoryMetrics.Free), nil
 	default:
 		return 0, fmt.Errorf("unsupported memory metric: %s", metricName)
-	}
-}
-
-func (e *Evaluator) extractLoadValue(cpuMetrics *metrics.CPUMetrics, metricName string) (float64, error) {
-	switch metricName {
-	case "load1":
-		return cpuMetrics.Load1, nil
-	case "load5":
-		return cpuMetrics.Load5, nil
-	case "load15":
-		return cpuMetrics.Load15, nil
-	default:
-		return 0, fmt.Errorf("unsupported load metric: %s", metricName)
 	}
 }
 

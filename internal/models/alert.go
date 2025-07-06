@@ -65,6 +65,7 @@ type ThresholdConfig struct {
 	Value        float64            `json:"value"`
 	Duration     time.Duration      `json:"duration,omitempty"`
 	SustainedFor int                `json:"sustained_for,omitempty"`
+	Target       *string            `json:"target,omitempty"` // For process-specific alerts
 }
 
 // Validate checks if the threshold configuration is valid
@@ -117,9 +118,9 @@ func (t *ThresholdConfig) Validate() error {
 
 // NotificationConfig defines how an alert is delivered
 type NotificationConfig struct {
-	Type     NotificationType `json:"type"`
-	Enabled  bool             `json:"enabled"`
-	Settings map[string]any   `json:"settings,omitempty"`
+	Type     NotificationType       `json:"type"`
+	Enabled  bool                   `json:"enabled"`
+	Settings map[string]interface{} `json:"settings,omitempty"` // e.g., {"recipient": "user@example.com"}
 }
 
 // Validate checks if the notification configuration is valid
@@ -140,8 +141,11 @@ func (n *NotificationConfig) Validate() error {
 			return errors.New("email notification requires settings")
 		}
 		recipient, ok := n.Settings["recipient"]
-		if !ok || recipient == "" {
-			return errors.New("email notification requires recipient")
+		if !ok {
+			return errors.New("email notification requires a recipient")
+		}
+		if _, ok := recipient.(string); !ok || recipient == "" {
+			return errors.New("email recipient must be a non-empty string")
 		}
 	}
 	return nil

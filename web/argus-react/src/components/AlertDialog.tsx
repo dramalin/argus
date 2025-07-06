@@ -191,6 +191,20 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
     });
   };
 
+  const handleNotificationSettingsChange = (index: number, key: string, value: string) => {
+    setAlertData(prev => {
+      const notifications = [...(prev.notifications || [])];
+      if (!notifications[index].settings) {
+        notifications[index].settings = {};
+      }
+      notifications[index].settings![key] = value;
+      return {
+        ...prev,
+        notifications
+      };
+    });
+  };
+
   // Add a new notification
   const addNotification = () => {
     setAlertData(prev => ({
@@ -242,6 +256,16 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
     if (alertData.threshold?.value === undefined || alertData.threshold.value === null) {
       newErrors['threshold.value'] = 'Threshold value is required';
     }
+    
+    if (alertData.threshold?.metric_type === 'process' && (!alertData.threshold.target || alertData.threshold.target.trim() === '')) {
+      newErrors['threshold.target'] = 'Process target (name or PID) is required';
+    }
+    
+    alertData.notifications?.forEach((notification, index) => {
+      if (notification.type === 'email' && (!notification.settings?.recipient || String(notification.settings.recipient).trim() === '')) {
+        newErrors[`notification.${index}.recipient`] = 'Recipient email is required';
+      }
+    });
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -449,6 +473,17 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
                   helperText="Optional: Sustained duration for alert"
                 />
               </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Process Name or PID"
+                  value={alertData.threshold?.target || ''}
+                  onChange={(e) => handleThresholdChange('target', e.target.value)}
+                  error={!!errors['threshold.target']}
+                  helperText={errors['threshold.target']}
+                  disabled={loading}
+                />
+              </Grid>
             </Grid>
           </Grid>
           
@@ -514,14 +549,13 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
                   {notification.type === 'email' && (
                     <Grid item xs={12}>
                       <TextField
-                        label="Email Address"
-                        value={notification.settings?.email || ''}
-                        onChange={(e) => {
-                          const newSettings = { ...notification.settings, email: e.target.value };
-                          handleNotificationChange(index, 'settings', newSettings);
-                        }}
                         fullWidth
-                        disabled={loading}
+                        label="Recipient Email"
+                        value={notification.settings?.recipient as string || ''}
+                        onChange={(e) => handleNotificationSettingsChange(index, 'recipient', e.target.value)}
+                        error={!!errors[`notification.${index}.recipient`]}
+                        helperText={errors[`notification.${index}.recipient`]}
+                        disabled={loading || !notification.enabled}
                       />
                     </Grid>
                   )}

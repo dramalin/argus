@@ -37,7 +37,9 @@ describe('LoadingErrorHandler', () => {
     
     expect(screen.getByText('Error loading metrics')).toBeInTheDocument();
     expect(screen.getByText(errorMessage)).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toBeInTheDocument();
+    const alerts = screen.getAllByRole('alert');
+    const liveAlert = alerts.find(alert => alert.getAttribute('aria-live') === 'assertive');
+    expect(liveAlert).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
     expect(screen.queryByText('Content')).not.toBeInTheDocument();
   });

@@ -131,6 +131,7 @@ func main() {
 	// Initialize alert evaluator
 	evalConfig := services.DefaultEvaluatorConfig()
 	alertEvaluator := services.NewEvaluator(alertStore, evalConfig)
+	alertEvaluator.SetMetricsCollector(metricsCollector)
 
 	// Create a context for the evaluator
 	evalCtx, evalCancel := context.WithCancel(context.Background())
@@ -143,11 +144,13 @@ func main() {
 	}
 
 	// Initialize notification system
+	hub := server.NewHub()
+	go hub.Run()
 	notifierConfig := services.DefaultConfig()
 	alertNotifier := services.NewNotifier(notifierConfig)
 
 	// Register notification channels
-	inAppChannel := services.NewInAppChannel(100) // Store up to 100 notifications
+	inAppChannel := services.NewInAppChannel(100, hub) // Store up to 100 notifications
 	alertNotifier.RegisterChannel(inAppChannel)
 
 	// Register email notification if configured
@@ -215,7 +218,9 @@ func main() {
 	// --- Use the new server package for all server setup ---
 	router := server.NewServer(cfg, alertsHandler, tasksHandler, metricsHandler)
 	// Add WebSocket route
-	router.GET("/ws", server.WebSocketHandler)
+	router.GET("/ws", func(c *gin.Context) {
+		server.ServeWs(hub, c.Writer, c.Request)
+	})
 
 	slog.Info("API routes and static file serving configured via server package")
 

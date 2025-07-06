@@ -118,6 +118,14 @@ func (h *AlertsHandler) CreateAlert(c *gin.Context) {
 		return
 	}
 
+	for i := range alert.Notifications {
+		if err := alert.Notifications[i].Validate(); err != nil {
+			slog.Debug("Invalid notification configuration", "error", err)
+			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: "Invalid notification configuration: " + err.Error()})
+			return
+		}
+	}
+
 	// Store the alert
 	if err := h.alertStore.CreateAlert(&alert); err != nil {
 		slog.Error("Failed to create alert", "error", err)
@@ -165,6 +173,14 @@ func (h *AlertsHandler) UpdateAlert(c *gin.Context) {
 		slog.Debug("Invalid alert update", "error", err)
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: "Invalid alert configuration: " + err.Error()})
 		return
+	}
+
+	for i := range alert.Notifications {
+		if err := alert.Notifications[i].Validate(); err != nil {
+			slog.Debug("Invalid notification configuration", "error", err)
+			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: "Invalid notification configuration: " + err.Error()})
+			return
+		}
 	}
 
 	// Update the alert

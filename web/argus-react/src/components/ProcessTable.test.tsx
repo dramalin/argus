@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProcessTable from './ProcessTable';
 import { renderWithProviders } from '../tests/utils/test-utils';
@@ -60,7 +60,6 @@ describe('ProcessTable', () => {
 
   it('calls onParamChange when filter inputs change', async () => {
     const onParamChange = vi.fn();
-    const user = userEvent.setup();
     
     renderWithProviders(
       <ProcessTable {...defaultProps} onParamChange={onParamChange} />
@@ -68,12 +67,12 @@ describe('ProcessTable', () => {
     
     // Filter by name
     const nameInput = screen.getByLabelText('Filter by name');
-    await user.type(nameInput, 'test');
+    fireEvent.change(nameInput, { target: { value: 'test' } });
     expect(onParamChange).toHaveBeenCalledWith('name_contains', 'test');
     
     // Filter by CPU
     const cpuInput = screen.getByLabelText('Min CPU %');
-    await user.type(cpuInput, '50');
+    fireEvent.change(cpuInput, { target: { value: '50' } });
     expect(onParamChange).toHaveBeenCalledWith('min_cpu', 50);
   });
 

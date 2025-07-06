@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Card, 
-  CardContent, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Card,
+  CardContent,
   Grid,
   Chip,
   Button,
@@ -12,9 +12,6 @@ import {
   Stack,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogContent,
-  DialogContentText,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
@@ -27,39 +24,59 @@ import { apiClient } from '../api';
 import type { AlertConfig, AlertStatus } from '../types/api';
 import LoadingErrorHandler from '../components/LoadingErrorHandler';
 import AlertDialog from '../components/AlertDialog';
-import { PageHeader, ConfirmDialog } from '../components/common';
-import { useNotification, useDataFetching, useDialogState, useDateFormatter } from '../hooks';
+import { PageHeader, ConfirmDialog, StatusChip, type StatusConfig } from '../components/common';
+import { useNotification, useDateFormatter, useResourceCRUD } from '../hooks';
+
+// Define status and severity maps for StatusChip
+const ALERT_STATUS_MAP: Record<string, StatusConfig> = {
+  'active': { label: 'Triggered', color: 'error' },
+  'pending': { label: 'Pending', color: 'warning' },
+  'resolved': { label: 'Normal', color: 'success' },
+  'inactive': { label: 'Inactive', color: 'default' },
+};
+
+const ALERT_SEVERITY_MAP: Record<string, StatusConfig> = {
+  'critical': { label: 'Critical', color: 'error' },
+  'warning': { label: 'Warning', color: 'warning' },
+  'info': { label: 'Info', color: 'info' },
+};
 
 /**
  * Alerts page component
  * Displays system alerts and allows management
  */
 const Alerts: React.FC = () => {
-  // Use the new hooks for data fetching, notifications, and dialog state
-  const { data, loading, error, lastUpdated, refetch } = useDataFetching<AlertConfig[]>(
-    'alerts',
-    apiClient.getAlerts,
-    { cacheTTL: 30000 }
-  );
-  
-  // Ensure alerts is never null
-  const alerts = data || [];
-  
+  // Use the useResourceCRUD hook for alert management
+  const {
+    items: alerts,
+    loading,
+    error,
+    lastUpdated,
+    refetch,
+    actionLoading,
+    selectedItem: selectedAlert,
+    setSelectedItem: setSelectedAlert,
+    isDialogOpen,
+    openDialog,
+    closeDialog,
+    handleCreate,
+    handleUpdate,
+    handleDelete,
+  } = useResourceCRUD<AlertConfig, Partial<AlertConfig>, Partial<AlertConfig>>({
+    resourceName: 'alert',
+    fetchFn: apiClient.getAlerts,
+    createFn: apiClient.createAlert,
+    updateFn: apiClient.updateAlert,
+    deleteFn: apiClient.deleteAlert,
+    cacheTTL: 30000,
+  });
+
   const [alertStatuses, setAlertStatuses] = useState<Record<string, AlertStatus>>({});
-  
-  // Use the dialog state hook for managing multiple dialogs
-  const { 
-    openDialog, 
-    closeDialog, 
-    isDialogOpen 
-  } = useDialogState<'create' | 'edit' | 'delete' | 'test'>();
-  
-  const [selectedAlert, setSelectedAlert] = useState<AlertConfig | null>(null);
-  const [actionLoading, setActionLoading] = useState<boolean>(false);
-  
+  const [testActionLoading, setTestActionLoading] = useState<boolean>(false);
+
   // Use the notification hook for managing notifications
   const { showNotification } = useNotification();
-  
+
   // Use the date formatter hook for consistent date formatting
   const { formatDate } = useDateFormatter();
 
@@ -67,9 +84,11 @@ const Alerts: React.FC = () => {
   const fetchAlertStatuses = useCallback(async () => {
     try {
       const response = await apiClient.getAllAlertStatus();
-      
+
       if (response.success && response.data) {
         setAlertStatuses(response.data);
+      } else {
+        console.error('Failed to fetch alert statuses:', response.error);
       }
     } catch (err) {
       console.error('Failed to fetch alert statuses:', err);
@@ -79,163 +98,83 @@ const Alerts: React.FC = () => {
   // Fetch alerts and statuses on component mount
   useEffect(() => {
     fetchAlertStatuses();
-    
+
     // Set up interval to refresh alert statuses
     const intervalId = setInterval(fetchAlertStatuses, 30000); // Every 30 seconds
-    
+
     return () => {
       clearInterval(intervalId);
     };
   }, [fetchAlertStatuses]);
 
   // Handle opening the create alert dialog
-  const handleCreateAlert = () => {
+  const openCreateAlertDialog = () => {
     setSelectedAlert(null);
     openDialog('create');
   };
-  
+
   // Handle opening the edit alert dialog
-  const handleEditAlert = (alert: AlertConfig) => {
+  const openEditAlertDialog = (alert: AlertConfig) => {
     setSelectedAlert(alert);
     openDialog('edit');
   };
-  
+
   // Handle opening the delete alert dialog
-  const handleDeleteAlert = (alert: AlertConfig) => {
+  const openDeleteAlertDialog = (alert: AlertConfig) => {
     setSelectedAlert(alert);
     openDialog('delete');
   };
-  
+
   // Handle opening the test alert dialog
-  const handleTestAlert = (alert: AlertConfig) => {
+  const openTestAlertDialog = (alert: AlertConfig) => {
     setSelectedAlert(alert);
     openDialog('test');
   };
-  
+
   // Handle toggling alert enabled status
   const handleToggleEnabled = async (alert: AlertConfig) => {
     try {
-      setActionLoading(true);
       const updatedAlert = { ...alert, enabled: !alert.enabled };
-      const response = await apiClient.updateAlert(alert.id, updatedAlert);
-      
-      if (response.success && response.data) {
-        // Update the alerts list with the updated alert
-        // We don't have a setAlerts function with useDataFetching, so we need to refetch
-        await refetch();
-        
-        showNotification(
-          `Alert ${alert.enabled ? 'disabled' : 'enabled'} successfully`,
-          'success'
-        );
-      } else {
-        throw new Error(response.error || 'Failed to update alert');
-      }
+      await handleUpdate(alert.id, updatedAlert);
+      // After update, refetch alert statuses as well
+      fetchAlertStatuses();
     } catch (err) {
-      showNotification(
-        err instanceof Error ? err.message : 'An unknown error occurred',
-        'error'
-      );
-    } finally {
-      setActionLoading(false);
+      // Notification is handled by useResourceCRUD's handleUpdate
+      console.error('Toggle enabled failed:', err);
     }
   };
-  
+
   // Handle saving a new alert
   const handleSaveAlert = async (alert: Partial<AlertConfig>) => {
-    try {
-      setActionLoading(true);
-      const response = await apiClient.createAlert(alert);
-      
-      if (response.success && response.data) {
-        // Ensure the response data includes notifications array
-        const responseData = {
-          ...response.data,
-          // If notifications is null or undefined in the response, use the notifications from the request
-          notifications: response.data.notifications || alert.notifications || []
-        };
-        
-        // Refetch alerts to include the new one
-        await refetch();
-        closeDialog('create');
-        showNotification('Alert created successfully', 'success');
-        
-        // Refresh alert statuses
-        fetchAlertStatuses();
-      } else {
-        throw new Error(response.error || 'Failed to create alert');
-      }
-    } catch (err) {
-      showNotification(
-        err instanceof Error ? err.message : 'An unknown error occurred',
-        'error'
-      );
-    } finally {
-      setActionLoading(false);
-    }
+    await handleCreate(alert);
+    // After create, refetch alert statuses
+    fetchAlertStatuses();
   };
-  
+
   // Handle updating an existing alert
   const handleUpdateAlert = async (alert: Partial<AlertConfig>) => {
     if (!selectedAlert) return;
-    
-    try {
-      setActionLoading(true);
-      const response = await apiClient.updateAlert(selectedAlert.id, alert);
-      
-      if (response.success && response.data) {
-        // Refetch alerts to include the updated one
-        await refetch();
-        closeDialog('edit');
-        showNotification('Alert updated successfully', 'success');
-      } else {
-        throw new Error(response.error || 'Failed to update alert');
-      }
-    } catch (err) {
-      showNotification(
-        err instanceof Error ? err.message : 'An unknown error occurred',
-        'error'
-      );
-    } finally {
-      setActionLoading(false);
-    }
+    await handleUpdate(selectedAlert.id, alert);
   };
-  
+
   // Handle deleting an alert
   const handleConfirmDelete = async () => {
     if (!selectedAlert) return;
-    
-    try {
-      setActionLoading(true);
-      const response = await apiClient.deleteAlert(selectedAlert.id);
-      
-      if (response.success) {
-        // Refetch alerts to remove the deleted one
-        await refetch();
-        closeDialog('delete');
-        showNotification('Alert deleted successfully', 'success');
-      } else {
-        throw new Error(response.error || 'Failed to delete alert');
-      }
-    } catch (err) {
-      showNotification(
-        err instanceof Error ? err.message : 'An unknown error occurred',
-        'error'
-      );
-    } finally {
-      setActionLoading(false);
-      setSelectedAlert(null);
-    }
+    await handleDelete(selectedAlert.id);
+    setSelectedAlert(null);
   };
-  
+
   // Handle testing an alert
   const handleConfirmTest = async () => {
     if (!selectedAlert) return;
-    
+
+    openDialog('test'); // Ensure dialog is open for the loading state
+
+    // This action is specific to Alerts and not part of generic CRUD
+    setTestActionLoading(true);
     try {
-      setActionLoading(true);
       const response = await apiClient.testAlert(selectedAlert.id);
-      
+
       if (response.success) {
         closeDialog('test');
         showNotification('Test alert sent successfully', 'success');
@@ -248,17 +187,17 @@ const Alerts: React.FC = () => {
         'error'
       );
     } finally {
-      setActionLoading(false);
+      setTestActionLoading(false);
       setSelectedAlert(null);
     }
   };
-  
+
   // Render threshold information
   const renderThreshold = (alert: AlertConfig) => {
     const { threshold } = alert;
-    
+
     // Get the label for the metric name
-    const metricTypeOptions = {
+    const metricTypeOptions: Record<string, string> = {
       'cpu': 'CPU',
       'memory': 'Memory',
       'load': 'System Load',
@@ -266,13 +205,13 @@ const Alerts: React.FC = () => {
       'disk': 'Disk',
       'process': 'Process'
     };
-    
+
     const metricType = threshold.metric_type;
     const metricName = threshold.metric_name;
-    
+
     // Find the display label for the metric name
     let metricNameLabel = metricName;
-    const metricNameOptions = {
+    const metricNameOptions: Record<string, string> = {
       'usage_percent': 'Usage (%)',
       'load1': 'Load (1m)',
       'load5': 'Load (5m)',
@@ -289,11 +228,11 @@ const Alerts: React.FC = () => {
       'cpu_percent': 'CPU (%)',
       'memory_percent': 'Memory (%)'
     };
-    
+
     if (metricName in metricNameOptions) {
       metricNameLabel = metricNameOptions[metricName as keyof typeof metricNameOptions];
     }
-    
+
     return (
       <Typography variant="body2">
         <strong>{metricTypeOptions[metricType as keyof typeof metricTypeOptions]} {metricNameLabel}</strong>{' '}
@@ -302,20 +241,20 @@ const Alerts: React.FC = () => {
       </Typography>
     );
   };
-  
+
   // Render notification information
   const renderNotifications = (alert: AlertConfig) => {
     if (!alert.notifications || alert.notifications.length === 0) {
       return <Typography variant="body2">No notifications configured</Typography>;
     }
-    
+
     return (
       <Stack direction="row" spacing={1}>
         {alert.notifications.map((notification, index) => {
           if (!notification.enabled) return null;
-          
+
           return (
-            <Chip 
+            <Chip
               key={index}
               label={notification.type === 'in-app' ? 'In-App' : 'Email'}
               size="small"
@@ -326,78 +265,45 @@ const Alerts: React.FC = () => {
       </Stack>
     );
   };
-  
-  // Get status color based on alert state
-  const getStatusColor = (alertId: string) => {
-    const status = alertStatuses[alertId];
-    if (!status) return 'default';
-    
-    switch (status.state) {
-      case 'active':
-        return 'error';
-      case 'pending':
-        return 'warning';
-      case 'resolved':
-        return 'success';
-      default:
-        return 'default';
-    }
-  };
-  
-  // Get status text based on alert state
-  const getStatusText = (alertId: string) => {
-    const status = alertStatuses[alertId];
-    if (!status) return 'Unknown';
-    
-    switch (status.state) {
-      case 'active':
-        return 'Triggered';
-      case 'pending':
-        return 'Pending';
-      case 'resolved':
-        return 'Normal';
-      case 'inactive':
-        return 'Inactive';
-      default:
-        return 'Unknown';
-    }
-  };
-  
+
   // Get status timestamp based on alert state
   const getStatusTimestamp = (alertId: string) => {
     const status = alertStatuses[alertId];
     if (!status) return null;
-    
+
     if (status.state === 'active' && status.triggered_at) {
       return `Triggered at ${formatDate(status.triggered_at)}`;
     } else if (status.state === 'resolved' && status.resolved_at) {
       return `Resolved at ${formatDate(status.resolved_at)}`;
     }
-    
+
     return null;
   };
 
   // Define page header actions
   const headerActions = (
     <>
-      <Button 
-        variant="contained" 
-        startIcon={<AddIcon />} 
-        onClick={handleCreateAlert}
-        sx={{ mr: 1 }}
+      <Button
+        variant="contained"
+        color="success"
+        startIcon={<AddIcon />}
+        onClick={openCreateAlertDialog}
       >
         Create Alert
       </Button>
-      <Button 
-        variant="contained" 
-        startIcon={<RefreshIcon />} 
+      <Button
+        variant="contained"
+        startIcon={<RefreshIcon />}
         onClick={() => { refetch(); fetchAlertStatuses(); }}
         disabled={loading}
+        sx={{ ml: 2 }}
       >
         Refresh
       </Button>
     </>
   );
+
+  const formattedLastUpdated = lastUpdated ? formatDate(lastUpdated.toISOString()) : null;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -405,7 +311,7 @@ const Alerts: React.FC = () => {
       <PageHeader
         title="Alerts"
         description="View and manage alerts. Alerts can be enabled, disabled, or manually triggered."
-        lastUpdated={lastUpdated}
+        lastUpdated={formattedLastUpdated}
         actions={headerActions}
         loading={loading}
       />
@@ -430,23 +336,18 @@ const Alerts: React.FC = () => {
                           <Typography variant="h6" component="div" sx={{ mb: 0.5 }}>
                             {alert.name}
                           </Typography>
-                          <Chip 
-                            label={getStatusText(alert.id)}
-                            color={getStatusColor(alert.id)}
-                            size="small"
-                            sx={{ mr: 1 }}
+                          <StatusChip 
+                            status={alertStatuses[alert.id]?.state || 'inactive'}
+                            statusMap={ALERT_STATUS_MAP}
+                            sx={{ mr: 1 }} // Add margin right to StatusChip
                           />
-                          <Chip 
-                            label={alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}
-                            color={
-                              alert.severity === 'critical' ? 'error' :
-                              alert.severity === 'warning' ? 'warning' : 'info'
-                            }
-                            size="small"
+                          <StatusChip
+                            status={alert.severity}
+                            statusMap={ALERT_SEVERITY_MAP}
                           />
                         </Box>
                         <Tooltip title={alert.enabled ? 'Disable' : 'Enable'}>
-                          <IconButton 
+                          <IconButton
                             onClick={() => handleToggleEnabled(alert)}
                             disabled={actionLoading}
                             color={alert.enabled ? 'primary' : 'default'}
@@ -456,36 +357,36 @@ const Alerts: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       </Box>
-                      
+
                       {alert.description && (
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
                           {alert.description}
                         </Typography>
                       )}
-                      
+
                       <Divider sx={{ my: 1.5 }} />
-                      
+
                       <Typography variant="subtitle2" sx={{ mt: 1 }}>
                         Threshold:
                       </Typography>
                       {renderThreshold(alert)}
-                      
+
                       <Typography variant="subtitle2" sx={{ mt: 1.5 }}>
                         Notifications:
                       </Typography>
                       {renderNotifications(alert)}
-                      
+
                       {getStatusTimestamp(alert.id) && (
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, fontSize: '0.8rem' }}>
                           {getStatusTimestamp(alert.id)}
                         </Typography>
                       )}
-                      
+
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                         <Tooltip title="Test">
-                          <IconButton 
-                            onClick={() => handleTestAlert(alert)}
-                            disabled={actionLoading || !alert.enabled}
+                          <IconButton
+                            onClick={() => openTestAlertDialog(alert)}
+                            disabled={actionLoading || testActionLoading || !alert.enabled}
                             size="small"
                             sx={{ mr: 1 }}
                           >
@@ -493,8 +394,8 @@ const Alerts: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Edit">
-                          <IconButton 
-                            onClick={() => handleEditAlert(alert)}
+                          <IconButton
+                            onClick={() => openEditAlertDialog(alert)}
                             disabled={actionLoading}
                             size="small"
                             sx={{ mr: 1 }}
@@ -503,8 +404,8 @@ const Alerts: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
-                          <IconButton 
-                            onClick={() => handleDeleteAlert(alert)}
+                          <IconButton
+                            onClick={() => openDeleteAlertDialog(alert)}
                             disabled={actionLoading}
                             color="error"
                             size="small"
@@ -521,7 +422,7 @@ const Alerts: React.FC = () => {
           )}
         </Box>
       </LoadingErrorHandler>
-      
+
       {/* Create Alert Dialog */}
       <AlertDialog
         open={isDialogOpen('create')}
@@ -529,7 +430,7 @@ const Alerts: React.FC = () => {
         onSave={handleSaveAlert}
         loading={actionLoading}
       />
-      
+
       {/* Edit Alert Dialog */}
       <AlertDialog
         open={isDialogOpen('edit')}
@@ -539,7 +440,7 @@ const Alerts: React.FC = () => {
         isEditing={true}
         loading={actionLoading}
       />
-      
+
       {/* Use the ConfirmDialog component for Delete Confirmation */}
       <ConfirmDialog
         open={isDialogOpen('delete')}
@@ -552,7 +453,7 @@ const Alerts: React.FC = () => {
         loading={actionLoading}
         severity="error"
       />
-      
+
       {/* Use the ConfirmDialog component for Test Alert */}
       <ConfirmDialog
         open={isDialogOpen('test')}
@@ -562,7 +463,7 @@ const Alerts: React.FC = () => {
         message={`This will trigger a test notification for the alert "${selectedAlert?.name}". Do you want to continue?`}
         confirmText="Test Alert"
         cancelText="Cancel"
-        loading={actionLoading}
+        loading={testActionLoading}
         severity="info"
       />
     </Box>

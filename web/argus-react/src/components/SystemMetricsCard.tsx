@@ -10,19 +10,18 @@ interface MetricCardProps {
   titleId?: string;
 }
 
-// Not used for now
-// export const MetricCardSkeleton: React.FC = () => (
-//   <Card elevation={2}>
-//     <CardContent>
-//       <Skeleton variant="text" width="60%" height={30} />
-//       <Skeleton variant="text" width="40%" height={40} sx={{ my: 1 }} />
-//       <Divider sx={{ my: 1 }} />
-//       <Skeleton variant="text" width="80%" />
-//       <Skeleton variant="text" width="70%" />
-//       <Skeleton variant="text" width="75%" />
-//     </CardContent>
-//   </Card>
-// );
+export const MetricCardSkeleton: React.FC = () => (
+  <Card elevation={2}>
+    <CardContent>
+      <Skeleton variant="text" width="60%" height={30} />
+      <Skeleton variant="text" width="40%" height={40} sx={{ my: 1 }} />
+      <Divider sx={{ my: 1 }} />
+      <Skeleton variant="text" width="80%" />
+      <Skeleton variant="text" width="70%" />
+      <Skeleton variant="text" width="75%" />
+    </CardContent>
+  </Card>
+);
 
 const SystemMetricsCard: React.FC<MetricCardProps> = ({
   title,
@@ -32,10 +31,9 @@ const SystemMetricsCard: React.FC<MetricCardProps> = ({
   details = [],
   titleId,
 }) => {
-  // Not used for now
-  // if (loading) {
-  //   return <MetricCardSkeleton />;
-  // }
+  if (loading) {
+    return <MetricCardSkeleton />;
+  }
 
   return (
     <Card
