@@ -1,6 +1,6 @@
 # Argus System Monitor
 
-A comprehensive real-time Linux system performance monitoring and alerting web application built with Go (Gin) backend and React (Vite) frontend.
+A comprehensive real-time Linux system performance monitoring and alerting web application **composed of a robust Go (Gin) backend and a modern React (Vite) frontend**. The backend provides RESTful APIs, WebSocket endpoints, and business logic, while the frontend delivers an interactive dashboard and management UI. Both layers are tightly integrated for a seamless user experience.
 
 ## 🚀 Latest Updates (v1.2.0)
 
@@ -189,11 +189,10 @@ sequenceDiagram
 
 ```text
 argus/
-├── cmd/argus/main.go          # Main application entry point
-├── internal/                  # Internal packages (config, server, services, handlers, models, database)
-├── web/                       # Frontend assets
-│   ├── argus-react/           # React (Vite) SPA frontend source
-│   └── release/               # Built React SPA for production
+├── cmd/argus/main.go          # Main application entry point (backend)
+├── internal/                  # Internal backend packages (config, server, services, handlers, models, database)
+├── web/                       # Frontend and static assets
+│   └── argus-react/           # React (Vite) SPA frontend source
 ├── Dockerfile                 # Multi-stage Docker build
 ├── docker-compose.yml         # Dev/prod orchestration
 ├── config.example.yaml        # Config template
@@ -205,7 +204,7 @@ argus/
 
 ## 🛠️ Technology Stack
 
-### Backend
+### Backend (API & Business Logic)
 
 - **Go 1.23.8** - Core runtime
 - **Gin 1.9.1** - HTTP web framework
@@ -215,7 +214,7 @@ argus/
 - **UUID 1.6.0** - Unique identifiers
 - **YAML v3.0.1** - Configuration management
 
-### Frontend
+### Frontend (SPA Dashboard)
 
 - **React 19.1.0** - UI framework
 - **TypeScript 5.8.3** - Type-safe JavaScript
@@ -229,6 +228,28 @@ argus/
 - **Docker Compose** - Multi-container orchestration
 - **Multi-stage builds** - Optimized container images
 
+## Project Analysis: Frontend & Backend Integration
+
+Argus is architected as a full-stack application with clear separation and integration between frontend and backend:
+
+- **Backend (Go/Gin):**
+  - Exposes RESTful APIs for system metrics, alerts, tasks, and notifications
+  - Provides a WebSocket endpoint for real-time updates
+  - Handles business logic, alert evaluation, task scheduling, and notification delivery
+  - Serves the built frontend SPA in production
+
+- **Frontend (React/Vite):**
+  - Implements a responsive, interactive dashboard for monitoring and management
+  - Communicates with the backend via REST APIs and WebSocket
+  - Visualizes system metrics, alerts, and tasks in real time
+  - Provides user interfaces for configuration, alerting, and task management
+
+**Integration:**
+
+- During development, the frontend runs on its own dev server and proxies API requests to the backend.
+- In production, the backend serves the static frontend assets from the `web/release/` directory.
+- Both layers are containerized for easy deployment and orchestration.
+
 ## Development Workflow
 
 ### Prerequisites
@@ -241,38 +262,42 @@ argus/
 
 | Command            | Description                                 |
 |--------------------|---------------------------------------------|
-| `make build`       | Build backend and frontend for production   |
-| `make dev`         | Run backend (auto-reload) & frontend (Vite) |
-| `make web-dev`     | Run frontend dev server only                |
-| `make web-build`   | Build frontend for production               |
-| `make clean`       | Clean all build artifacts                   |
-| `make deps`        | Install Go and frontend dependencies        |
-| `make lint`        | Lint Go code                                |
-| `make web-lint`    | Lint frontend code                          |
-| `make docker-up`   | Start all services with docker-compose      |
-| `make docker-down` | Stop all docker-compose services            |
-| `make docker-build`| Build Docker image                          |
+| `make build`       | Build both backend and frontend              |
+| `make build-frontend` | Build frontend and copy to release directory |
+| `make build-backend`  | Build Go backend only                      |
+| `make clean`       | Clean build artifacts                        |
+| `make analyze`     | Run static analysis to find unused code      |
 
 ### Local Development (Recommended)
 
-1. **Install dependencies:**
+1. **Build the project (backend and frontend):**
 
    ```bash
-   make deps
+   make build
    ```
 
-2. **Start dev servers (backend + frontend):**
+2. **Run the backend server:**
 
    ```bash
-   make dev
+   ./release/bin/argus
    ```
 
-   - Backend: [http://localhost:8080](http://localhost:8080)
-   - Frontend: [http://localhost:5173](http://localhost:5173)
+   - The backend will serve the built frontend SPA from `release/web/` at [http://localhost:8080](http://localhost:8080).
 
-3. **Access the app:**
-   - During development: Open [http://localhost:5173](http://localhost:5173) for the React dashboard.
-   - Backend server with React: [http://localhost:8080](http://localhost:8080)
+3. **(Optional) Frontend development mode:**
+   - For hot-reloading and faster frontend development, you can run the React dev server separately:
+
+   ```bash
+   cd web/argus-react
+   npm install
+   npm run dev
+   ```
+
+   - The frontend will be available at [http://localhost:5173](http://localhost:5173) and will proxy API requests to the backend.
+
+4. **Access the app:**
+   - Production mode: [http://localhost:8080](http://localhost:8080)
+   - Frontend dev mode: [http://localhost:5173](http://localhost:5173)
 
 ### Production Build
 
@@ -290,59 +315,71 @@ argus/
 
    - Serves the React SPA from `web/release/` (built by frontend)
 
-### Docker Workflow
-
-1. **Build and start all services:**
-
-   ```bash
-   make docker-up
-   ```
-
-   - Backend: [http://localhost:8080](http://localhost:8080)
-   - Frontend (dev): [http://localhost:5173](http://localhost:5173)
-
-2. **Stop all services:**
-
-   ```bash
-   make docker-down
-   ```
-
-3. **View logs:**
-
-   ```bash
-   make docker-logs
-   ```
-
-### Testing & Linting
-
-- **Go tests:**
-
-  ```bash
-  make test
-  ```
-
-- **Frontend lint:**
-
-  ```bash
-  make web-lint
-  ```
-
-- **Go lint:**
-
-  ```bash
-  make lint
-  ```
-
 ### Configuration
 
-- Copy `config.example.yaml` to `config.yaml` and edit as needed.
-- Environment variables can override config values (see docs/framework_directory.md).
+The application uses a YAML configuration file. Copy `config.example.yaml` to `config.yaml` and customize as needed:
+
+```yaml
+server:
+    port: 8080
+    host: "localhost"
+    read_timeout: "30s"
+    write_timeout: "30s"
+
+debug:
+    enabled: true
+    pprof_enabled: true
+    pprof_path: "/debug/pprof"
+    benchmark_enabled: true
+
+monitoring:
+    update_interval: "5s"
+    metrics_retention: "24h"
+    process_limit: 500
+
+alerts:
+    enabled: true
+    storage_path: "./.argus/alerts"
+    notification_interval: "1m"
+
+tasks:
+    enabled: true
+    storage_path: "./.argus/tasks"
+    max_concurrent: 5
+
+storage:
+    base_path: "./.argus"
+    file_permissions: 0644
+    backup_enabled: true
+
+logging:
+    level: "info"
+    format: "json"
+    file: ""
+
+websocket:
+    enabled: true
+    path: "/ws"
+    read_buffer_size: 1024
+    write_buffer_size: 1024
+
+cors:
+    enabled: true
+    allowed_origins: ["http://localhost:3000", "http://localhost:5173"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["Content-Type", "Authorization"]
+```
+
+- Edit `config.yaml` to match your environment and security requirements.
+- Environment variables can override any configuration value (e.g. `ARGUS_SERVER_PORT=9090`).
 
 ### Directory Conventions
 
 - Backend code: `internal/`
+- Backend entrypoint: `cmd/argus/main.go`
 - Frontend app: `web/argus-react/`
-- Static assets: `web/static/`
+- Built frontend assets: `release/web/`
+- Backend binary: `release/bin/argus`
 - Config: `config.yaml`
 - Docs: `docs/`
 
@@ -350,35 +387,35 @@ argus/
 
 ### System Metrics
 
-- `GET /api/v1/metrics` - Get all system metrics
-- `GET /api/v1/metrics/cpu` - Get CPU usage
-- `GET /api/v1/metrics/memory` - Get memory usage  
-- `GET /api/v1/metrics/network` - Get network statistics
-- `GET /api/v1/metrics/load` - Get system load average
+- `GET /api/metrics` - Get all system metrics
+- `GET /api/metrics/cpu` - Get CPU usage
+- `GET /api/metrics/memory` - Get memory usage  
+- `GET /api/metrics/network` - Get network statistics
+- `GET /api/metrics/load` - Get system load average
 
 ### Alerts Management
 
-- `GET /api/v1/alerts` - List all alert configurations
-- `POST /api/v1/alerts` - Create new alert
-- `PUT /api/v1/alerts/:id` - Update alert configuration
-- `DELETE /api/v1/alerts/:id` - Delete alert
-- `GET /api/v1/alerts/status` - Get alert status
-- `POST /api/v1/alerts/test/:id` - Test alert configuration
-
-### Task Management
-
-- `GET /api/v1/tasks` - List all tasks
-- `POST /api/v1/tasks` - Create new task
-- `PUT /api/v1/tasks/:id` - Update task
-- `DELETE /api/v1/tasks/:id` - Delete task
-- `POST /api/v1/tasks/:id/run` - Execute task manually
+- `GET /api/alerts` - List all alert configurations
+- `POST /api/alerts` - Create new alert
+- `PUT /api/alerts/:id` - Update alert configuration
+- `DELETE /api/alerts/:id` - Delete alert
+- `GET /api/alerts/status` - Get alert status
+- `POST /api/alerts/test/:id` - Test alert configuration
 
 ### Notifications
 
-- `GET /api/v1/alerts/notifications` - Get all notifications
-- `POST /api/v1/alerts/notifications/:id/read` - Mark notification as read
-- `POST /api/v1/alerts/notifications/read-all` - Mark all notifications as read
-- `DELETE /api/v1/alerts/notifications` - Clear all notifications
+- `GET /api/alerts/notifications` - Get all notifications
+- `POST /api/alerts/notifications/:id/read` - Mark notification as read
+- `POST /api/alerts/notifications/read-all` - Mark all notifications as read
+- `DELETE /api/alerts/notifications` - Clear all notifications
+
+### Task Management
+
+- `GET /api/tasks` - List all tasks
+- `POST /api/tasks` - Create new task
+- `PUT /api/tasks/:id` - Update task
+- `DELETE /api/tasks/:id` - Delete task
+- `POST /api/tasks/:id/run` - Execute task manually
 
 ### WebSocket
 
@@ -388,95 +425,87 @@ For detailed API documentation, see [docs/api_documentation.md](docs/api_documen
 
 ## 🚀 Quick Start
 
-### Option 1: Docker (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/argus.git
-cd argus
-
-# Start with Docker Compose
-make docker-up
-
-# Access the application
-# - Frontend: http://localhost:8080
-# - API: http://localhost:8080/api/v1/
-```
-
-### Option 2: Local Development
+### Local Development
 
 ```bash
 # Clone and setup
 git clone https://github.com/yourusername/argus.git
 cd argus
 
-# Install dependencies
-make deps
+# Build backend and frontend
+make build
 
 # Copy and configure
 cp config.example.yaml config.yaml
 # Edit config.yaml as needed
 
-# Start development servers
-make dev
+# Run backend server
+./release/bin/argus
 
-# Access the application
-# - Frontend: http://localhost:5173
-# - Backend: http://localhost:8080
+# (Optional) For frontend development with hot reload:
+cd web/argus-react
+npm install
+npm run dev
+# Access frontend at http://localhost:5173 (proxies API to backend)
 ```
-
-## 📊 Screenshots
-
-### Dashboard Overview
-
-![Dashboard](docs/images/dashboard.png)
-
-### Alert Configuration
-
-![Alerts](docs/images/alerts.png)
-
-### Task Scheduler
-
-![Tasks](docs/images/tasks.png)
 
 ## 🔧 Configuration
 
-The application uses a YAML configuration file. Copy `config.example.yaml` to `config.yaml`:
+The application uses a YAML configuration file. Copy `config.example.yaml` to `config.yaml` and customize as needed:
 
 ```yaml
 server:
-  port: 8080
-  host: "0.0.0.0"
-  
+    port: 8080
+    host: "localhost"
+    read_timeout: "30s"
+    write_timeout: "30s"
+
+debug:
+    enabled: true
+    pprof_enabled: true
+    pprof_path: "/debug/pprof"
+    benchmark_enabled: true
+
+monitoring:
+    update_interval: "5s"
+    metrics_retention: "24h"
+    process_limit: 500
+
 alerts:
-  check_interval: "30s"
-  notification_timeout: "5m"
-  
+    enabled: true
+    storage_path: "./.argus/alerts"
+    notification_interval: "1m"
+
 tasks:
-  max_concurrent: 5
-  default_timeout: "10m"
-  
-notifications:
-  email:
-    smtp_server: "smtp.gmail.com"
-    smtp_port: 587
-    username: "your-email@gmail.com"
-    password: "your-app-password"
-  
-  slack:
-    webhook_url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
-    
-  webhook:
-    url: "https://your-webhook-endpoint.com"
-    timeout: "10s"
+    enabled: true
+    storage_path: "./.argus/tasks"
+    max_concurrent: 5
+
+storage:
+    base_path: "./.argus"
+    file_permissions: 0644
+    backup_enabled: true
+
+logging:
+    level: "info"
+    format: "json"
+    file: ""
+
+websocket:
+    enabled: true
+    path: "/ws"
+    read_buffer_size: 1024
+    write_buffer_size: 1024
+
+cors:
+    enabled: true
+    allowed_origins: ["http://localhost:3000", "http://localhost:5173"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["Content-Type", "Authorization"]
 ```
 
-Environment variables can override any configuration value:
-
-```bash
-export ARGUS_SERVER_PORT=9090
-export ARGUS_ALERTS_CHECK_INTERVAL=60s
-```
+- Edit `config.yaml` to match your environment and security requirements.
+- Environment variables can override any configuration value (e.g. `ARGUS_SERVER_PORT=9090`).
 
 ## 🐛 Troubleshooting
 
@@ -506,18 +535,6 @@ export ARGUS_SERVER_PORT=9090
 - Validate Slack webhook configuration
 - Review logs for error messages
 
-#### Docker Issues
-
-```bash
-# Clean up Docker resources
-make docker-down
-docker system prune -f
-
-# Rebuild containers
-make docker-build
-make docker-up
-```
-
 ### Debug Mode
 
 Enable debug logging:
@@ -534,19 +551,6 @@ logging:
   format: json
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes**
-4. **Run tests**: `make test`
-5. **Run linting**: `make lint && make web-lint`
-6. **Commit your changes**: `git commit -m 'Add amazing feature'`
-7. **Push to the branch**: `git push origin feature/amazing-feature`
-8. **Open a Pull Request**
-
 ### Development Standards
 
 - Follow Go formatting standards (`gofmt`)
@@ -558,59 +562,23 @@ We welcome contributions! Please follow these guidelines:
 ### Project Structure Guidelines
 
 - Backend code: `internal/`
+- Backend entrypoint: `cmd/argus/main.go`
 - Frontend code: `web/argus-react/src/`
+- Built frontend: `release/web/`
+- Backend binary: `release/bin/argus`
 - Tests: `*_test.go` files
 - Documentation: `docs/`
 - Examples: `examples/`
-
-## 📈 Performance
-
-### Metrics Collection
-
-- **CPU**: Updated every 5 seconds
-- **Memory**: Updated every 5 seconds  
-- **Network**: Updated every 10 seconds
-- **Load Average**: Updated every 15 seconds
-
-### Resource Usage
-
-- **Memory**: ~50MB baseline
-- **CPU**: <5% during normal operation
-- **Network**: Minimal overhead
-- **Disk**: Log rotation prevents disk buildup
-
-## 🔒 Security
-
-- No sensitive data stored in logs
-- Configuration supports environment variables
-- HTTPS support for production deployments
-- Input validation on all API endpoints
-- Rate limiting on API endpoints
 
 ## 📚 Additional Resources
 
 - [Architecture Documentation](docs/framework_directory.md)
 - [API Reference](docs/api_documentation.md)
 - [Production Deployment Guide](docs/argus_prd.md)
-- [Example Configurations](examples/)
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## 🏷️ Version History
-
-- **v1.2.0** (Current) - Enhanced alert system, notifications, task management
-- **v1.1.0** - WebSocket support, improved UI
-- **v1.0.0** - Initial release with basic monitoring
-
-## 📧 Support
-
-For issues and questions:
-
-- Create an issue on GitHub
-- Check the documentation in `docs/`
-- Review the troubleshooting section above
 
 ---
 
