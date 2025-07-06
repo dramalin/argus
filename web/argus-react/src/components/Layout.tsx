@@ -17,13 +17,20 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider
+  Divider,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import TaskIcon from '@mui/icons-material/Task';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import MenuIcon from '@mui/icons-material/Menu';
+import { useUiContext } from '../context/UiContext';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -36,6 +43,37 @@ function a11yProps(index: number) {
     'aria-controls': `tabpanel-${index}`,
   };
 }
+
+const ThemeSwitcher: React.FC = () => {
+  const { state, setThemeMode, setColorTone } = useUiContext();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <FormControl size="small" variant="outlined">
+        <InputLabel id="color-tone-label">Color Tone</InputLabel>
+        <Select
+          labelId="color-tone-label"
+          value={state.colorTone}
+          label="Color Tone"
+          onChange={e => setColorTone(e.target.value)}
+          style={{ minWidth: 100 }}
+        >
+          <MenuItem value="morandi">Morandi</MenuItem>
+          <MenuItem value="cobalt">Cobalt</MenuItem>
+        </Select>
+      </FormControl>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={state.themeMode === 'dark'}
+            onChange={e => setThemeMode(e.target.checked ? 'dark' : 'light')}
+            color="primary"
+          />
+        }
+        label={state.themeMode === 'dark' ? 'Dark' : 'Light'}
+      />
+    </div>
+  );
+};
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
@@ -174,6 +212,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               ))}
             </Tabs>
           )}
+          <ThemeSwitcher />
         </Toolbar>
       </AppBar>
       

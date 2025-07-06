@@ -3,6 +3,7 @@
  */
 import type { ReactNode } from 'react';
 import type { SystemMetrics, ProcessInfo, ProcessResponse, ProcessQueryParams, AsyncData, ThemeMode, Notification } from './index';
+import type { ColorTone } from '../theme/theme';
 
 /**
  * State for the metrics context
@@ -87,6 +88,8 @@ export interface ProcessesContextValue {
 export interface UiState {
   /** Current theme mode */
   themeMode: ThemeMode;
+  /** Current color tone */
+  colorTone: ColorTone;
   /** Whether the sidebar is open */
   sidebarOpen: boolean;
   /** Current notifications */
@@ -112,6 +115,8 @@ export interface UiContextValue {
   state: UiState;
   /** Function to set theme mode */
   setThemeMode: (mode: ThemeMode) => void;
+  /** Function to set color tone */
+  setColorTone: (tone: ColorTone) => void;
   /** Function to toggle sidebar */
   toggleSidebar: () => void;
   /** Function to set sidebar open state */

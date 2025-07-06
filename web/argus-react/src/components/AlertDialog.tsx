@@ -32,6 +32,7 @@ import type {
   ThresholdConfig,
   NotificationConfig
 } from '../types/api';
+import { useTheme } from '@mui/material/styles';
 
 // Default values for a new alert
 const DEFAULT_ALERT: Partial<AlertConfig> = {
@@ -106,6 +107,8 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
   isEditing = false,
   loading = false
 }) => {
+  const theme = useTheme();
+
   // Initialize alert state with default values or provided alert
   const [alertData, setAlertData] = useState<Partial<AlertConfig>>(
     alert || DEFAULT_ALERT
@@ -140,16 +143,43 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
     }
   };
 
+  // Helper to get a complete threshold object
+  const getCompleteThreshold = (partial: Partial<ThresholdConfig>): ThresholdConfig | undefined => {
+    if (
+      partial &&
+      partial.metric_type &&
+      partial.metric_name &&
+      partial.operator &&
+      typeof partial.value === 'number'
+    ) {
+      const result: ThresholdConfig = {
+        metric_type: partial.metric_type,
+        metric_name: partial.metric_name,
+        operator: partial.operator,
+        value: partial.value,
+      };
+      if (typeof partial.duration === 'number') result.duration = partial.duration;
+      if (typeof partial.sustained_for === 'number') result.sustained_for = partial.sustained_for;
+      return result;
+    }
+    return undefined;
+  };
+
   // Handle threshold field changes
   const handleThresholdChange = (field: string, value: any) => {
-    setAlertData(prev => ({
-      ...prev,
-      threshold: {
-        ...prev.threshold,
-        [field]: value
+    setAlertData(prev => {
+      const prevThreshold = prev.threshold || {};
+      const updated = { ...prevThreshold, [field]: value };
+      const complete = getCompleteThreshold(updated);
+      if (complete) {
+        return { ...prev, threshold: complete };
+      } else {
+        // Remove threshold if not complete
+        const { threshold, ...rest } = prev;
+        return rest;
       }
-    }));
-    
+    });
+
     // Clear error for this field if exists
     if (errors[`threshold.${field}`]) {
       setErrors(prev => {
@@ -158,20 +188,27 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
         return newErrors;
       });
     }
-    
+
     // Update metric name options when metric type changes
     if (field === 'metric_type') {
       const metricType = value as MetricType;
       const options = METRIC_NAME_OPTIONS[metricType];
       if (options && options.length > 0) {
-        setAlertData(prev => ({
-          ...prev,
-          threshold: {
-            ...prev.threshold,
+        setAlertData(prev => {
+          const prevThreshold = prev.threshold || {};
+          const updated = {
+            ...prevThreshold,
             metric_type: metricType,
-            metric_name: options[0].value
+            metric_name: options[0].value,
+          };
+          const complete = getCompleteThreshold(updated);
+          if (complete) {
+            return { ...prev, threshold: complete };
+          } else {
+            const { threshold, ...rest } = prev;
+            return rest;
           }
-        }));
+        });
       }
     }
   };
@@ -255,10 +292,6 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
     
     if (alertData.threshold?.value === undefined || alertData.threshold.value === null) {
       newErrors['threshold.value'] = 'Threshold value is required';
-    }
-    
-    if (alertData.threshold?.metric_type === 'process' && (!alertData.threshold.target || alertData.threshold.target.trim() === '')) {
-      newErrors['threshold.target'] = 'Process target (name or PID) is required';
     }
     
     alertData.notifications?.forEach((notification, index) => {
@@ -473,17 +506,6 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
                   helperText="Optional: Sustained duration for alert"
                 />
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Process Name or PID"
-                  value={alertData.threshold?.target || ''}
-                  onChange={(e) => handleThresholdChange('target', e.target.value)}
-                  error={!!errors['threshold.target']}
-                  helperText={errors['threshold.target']}
-                  disabled={loading}
-                />
-              </Grid>
             </Grid>
           </Grid>
           
@@ -506,7 +528,7 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
             </Box>
             
             {alertData.notifications?.map((notification, index) => (
-              <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+              <Box key={index} sx={{ mb: 2, p: 2, border: `1px solid ${theme.palette.divider}`, borderRadius: 1 }}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={4}>
                     <FormControl fullWidth>

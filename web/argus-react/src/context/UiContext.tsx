@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer } from 'react';
+import type { ReactNode } from 'react';
+import type { ThemeMode } from '../types/common';
+import type { ColorTone } from '../theme/theme';
 
 // Define UI state types
 interface UiState {
   darkMode: boolean;
+  themeMode: ThemeMode;
+  colorTone: ColorTone;
   sidebarOpen: boolean;
   refreshInterval: number;
   activeTab: string;
@@ -18,6 +23,8 @@ interface UiState {
 type UiAction =
   | { type: 'TOGGLE_DARK_MODE' }
   | { type: 'SET_DARK_MODE'; payload: boolean }
+  | { type: 'SET_THEME_MODE'; payload: ThemeMode }
+  | { type: 'SET_COLOR_TONE'; payload: ColorTone }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SIDEBAR'; payload: boolean }
   | { type: 'SET_REFRESH_INTERVAL'; payload: number }
@@ -31,6 +38,8 @@ interface UiContextType {
   state: UiState;
   dispatch: React.Dispatch<UiAction>;
   toggleDarkMode: () => void;
+  setThemeMode: (mode: ThemeMode) => void;
+  setColorTone: (tone: ColorTone) => void;
   toggleSidebar: () => void;
   setRefreshInterval: (interval: number) => void;
   setActiveTab: (tab: string) => void;
@@ -45,6 +54,8 @@ const UiContext = createContext<UiContextType | undefined>(undefined);
 // Initial state
 const initialState: UiState = {
   darkMode: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches,
+  themeMode: (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light',
+  colorTone: 'morandi',
   sidebarOpen: true,
   refreshInterval: 5000, // 5 seconds
   activeTab: 'dashboard',
@@ -58,11 +69,24 @@ function uiReducer(state: UiState, action: UiAction): UiState {
       return {
         ...state,
         darkMode: !state.darkMode,
+        themeMode: !state.darkMode ? 'dark' : 'light',
       };
     case 'SET_DARK_MODE':
       return {
         ...state,
         darkMode: action.payload,
+        themeMode: action.payload ? 'dark' : 'light',
+      };
+    case 'SET_THEME_MODE':
+      return {
+        ...state,
+        themeMode: action.payload,
+        darkMode: action.payload === 'dark',
+      };
+    case 'SET_COLOR_TONE':
+      return {
+        ...state,
+        colorTone: action.payload,
       };
     case 'TOGGLE_SIDEBAR':
       return {
@@ -127,10 +151,13 @@ export const UiProvider: React.FC<UiProviderProps> = ({
   const [state, dispatch] = useReducer(uiReducer, {
     ...initialState,
     darkMode: initialDarkMode !== undefined ? initialDarkMode : initialState.darkMode,
+    themeMode: initialDarkMode !== undefined ? (initialDarkMode ? 'dark' : 'light') : initialState.themeMode,
   });
 
   // Helper functions
   const toggleDarkMode = () => dispatch({ type: 'TOGGLE_DARK_MODE' });
+  const setThemeMode = (mode: ThemeMode) => dispatch({ type: 'SET_THEME_MODE', payload: mode });
+  const setColorTone = (tone: ColorTone) => dispatch({ type: 'SET_COLOR_TONE', payload: tone });
   const toggleSidebar = () => dispatch({ type: 'TOGGLE_SIDEBAR' });
   const setRefreshInterval = (interval: number) => dispatch({ type: 'SET_REFRESH_INTERVAL', payload: interval });
   const setActiveTab = (tab: string) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab });
@@ -147,6 +174,8 @@ export const UiProvider: React.FC<UiProviderProps> = ({
         state,
         dispatch,
         toggleDarkMode,
+        setThemeMode,
+        setColorTone,
         toggleSidebar,
         setRefreshInterval,
         setActiveTab,

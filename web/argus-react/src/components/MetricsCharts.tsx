@@ -25,13 +25,13 @@ const MetricsCharts: React.FC<MetricsChartsProps> = ({ metrics, cpuHistory }) =>
         {
           label: 'CPU Usage (%)',
           data: cpuHistory.map(point => point.value),
-          borderColor: 'rgba(106, 123, 162, 1)',        // Morandi blue
-          backgroundColor: 'rgba(106, 123, 162, 0.2)',  // Morandi blue with transparency
+          borderColor: theme.palette.primary.main,
+          backgroundColor: theme.palette.primary.light + '33', // 20% opacity
           borderWidth: 2,
-          tension: 0.4,                                 // Adds curve to the line
-          fill: true,                                   // Fill area under the line
-          pointRadius: 2,                               // Small points
-          pointHoverRadius: 5,                          // Larger points on hover
+          tension: 0.4,
+          fill: true,
+          pointRadius: 2,
+          pointHoverRadius: 5,
         },
       ],
     };
@@ -43,12 +43,12 @@ const MetricsCharts: React.FC<MetricsChartsProps> = ({ metrics, cpuHistory }) =>
         {
           data: [metrics.memory.used, metrics.memory.free],
           backgroundColor: [
-            'rgba(185, 122, 122, 0.7)',  // Morandi rose (error color)
-            'rgba(122, 162, 158, 0.7)',  // Morandi teal (success color)
+            theme.palette.error.main + 'b3', // 70% opacity
+            theme.palette.success.main + 'b3',
           ],
           borderColor: [
-            'rgba(185, 122, 122, 1)',
-            'rgba(122, 162, 158, 1)',
+            theme.palette.error.main,
+            theme.palette.success.main,
           ],
           borderWidth: 1,
         },
@@ -62,8 +62,8 @@ const MetricsCharts: React.FC<MetricsChartsProps> = ({ metrics, cpuHistory }) =>
         {
           label: 'System Load',
           data: [metrics.cpu.load1, metrics.cpu.load5, metrics.cpu.load15],
-          backgroundColor: 'rgba(122, 158, 185, 0.6)',  // Morandi info blue
-          borderColor: 'rgba(122, 158, 185, 1)',        // Morandi info blue
+          backgroundColor: theme.palette.info.main + '99', // 60% opacity
+          borderColor: theme.palette.info.main,
           borderWidth: 1,
         },
       ],
@@ -80,12 +80,12 @@ const MetricsCharts: React.FC<MetricsChartsProps> = ({ metrics, cpuHistory }) =>
             metrics.network.bytes_recv / 1024 / 1024
           ],
           backgroundColor: [
-            'rgba(185, 169, 122, 0.6)',  // Morandi warning gold
-            'rgba(122, 162, 158, 0.6)',  // Morandi teal (success color)
+            theme.palette.warning.main + '99', // 60% opacity
+            theme.palette.success.main + '99',
           ],
           borderColor: [
-            'rgba(185, 169, 122, 1)',
-            'rgba(122, 162, 158, 1)',
+            theme.palette.warning.main,
+            theme.palette.success.main,
           ],
           borderWidth: 1,
         },

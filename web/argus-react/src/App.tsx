@@ -1,13 +1,15 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useContext } from 'react';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import theme from './theme/theme';
+import { getTheme } from './theme/theme';
+import type { ColorTone, ThemeMode } from './theme/theme';
 import AppProvider from './context/AppProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
 import { routes, RouteComponent } from './routes';
 import './App.css';
 import { useNotification } from './hooks';
+import { useUiContext } from './context/UiContext';
 
 // Lazy-loaded components
 const Layout = lazy(() => import('./components/Layout'));
@@ -25,31 +27,41 @@ const NotificationHandler: React.FC = () => {
  */
 function App(): React.ReactElement {
   return (
-    <ErrorBoundary>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <AppProvider>
-          <NotificationHandler />
-          <BrowserRouter>
-            <Suspense fallback={<LoadingFallback message="Loading application..." contained={false} />}>
-              <Layout>
-                <ErrorBoundary>
-                  <Routes>
-                    {routes.map((route) => (
-                      <Route
-                        key={route.path}
-                        path={route.path}
-                        element={<RouteComponent component={route.component} />}
-                      />
-                    ))}
-                  </Routes>
-                </ErrorBoundary>
-              </Layout>
-            </Suspense>
-          </BrowserRouter>
-        </AppProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <AppProvider>
+      <ErrorBoundary>
+        <AppWithContext />
+      </ErrorBoundary>
+    </AppProvider>
+  );
+}
+
+function AppWithContext(): React.ReactElement {
+  const ui = useUiContext();
+  const themeMode: ThemeMode = ui.state.themeMode || 'light';
+  const colorTone: ColorTone = ui.state.colorTone || 'morandi';
+  const theme = getTheme(colorTone, themeMode);
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <NotificationHandler />
+      <BrowserRouter>
+        <Suspense fallback={<LoadingFallback message="Loading application..." contained={false} />}>
+          <Layout>
+            <ErrorBoundary>
+              <Routes>
+                {routes.map((route) => (
+                  <Route
+                    key={route.path}
+                    path={route.path}
+                    element={<RouteComponent component={route.component} />}
+                  />
+                ))}
+              </Routes>
+            </ErrorBoundary>
+          </Layout>
+        </Suspense>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
