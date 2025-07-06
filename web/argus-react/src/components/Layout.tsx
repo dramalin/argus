@@ -49,13 +49,13 @@ const ThemeSwitcher: React.FC = () => {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
       <FormControl size="small" variant="outlined">
-        <InputLabel id="color-tone-label">Color Tone</InputLabel>
+        <InputLabel id="color-tone-label" style={{ color: 'white' }}>Color Tone</InputLabel>
         <Select
           labelId="color-tone-label"
           value={state.colorTone}
           label="Color Tone"
           onChange={e => setColorTone(e.target.value)}
-          style={{ minWidth: 100 }}
+          style={{ minWidth: 100, color: 'white' }}
         >
           <MenuItem value="morandi">Morandi</MenuItem>
           <MenuItem value="cobalt">Cobalt</MenuItem>
