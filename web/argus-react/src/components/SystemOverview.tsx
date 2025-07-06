@@ -6,6 +6,7 @@ import type { SystemMetrics } from '../types/api';
 interface SystemOverviewProps {
   metrics: SystemMetrics | null;
   loading: boolean;
+  processTotal?: number;
 }
 
 /**
@@ -13,10 +14,11 @@ interface SystemOverviewProps {
  * Displays system metrics cards for CPU, memory, network, and processes
  * Optimized with useMemo for better performance
  */
-const SystemOverview: React.FC<SystemOverviewProps> = ({ metrics, loading }) => {
+const SystemOverview: React.FC<SystemOverviewProps> = ({ metrics, loading, processTotal }) => {
   // Memoize process counts to avoid recalculation on every render
   const processCounts = useMemo(() => {
-    const processTotalSummary = metrics?.processes?.length || 0;
+    const processTotalSummary =
+      typeof processTotal === 'number' ? processTotal : metrics?.processes?.length || 0;
     const processRunning = processTotalSummary > 0 ? Math.round(processTotalSummary * 0.6) : 0; // Estimate as 60% running
     const processSleeping = processTotalSummary > 0 ? Math.round(processTotalSummary * 0.35) : 0; // Estimate as 35% sleeping
     const processStopped = processTotalSummary > 0 ? Math.round(processTotalSummary * 0.05) : 0; // Estimate as 5% stopped
@@ -27,7 +29,7 @@ const SystemOverview: React.FC<SystemOverviewProps> = ({ metrics, loading }) => 
       sleeping: processSleeping,
       stopped: processStopped
     };
-  }, [metrics?.processes?.length]);
+  }, [processTotal, metrics?.processes?.length]);
 
   // Memoize CPU details to avoid recalculation on every render
   const cpuDetails = useMemo(() => (
@@ -75,7 +77,7 @@ const SystemOverview: React.FC<SystemOverviewProps> = ({ metrics, loading }) => 
       <Grid item xs={12} sm={6} md={3} sx={{ pl: 3, pt: 3 }}>
         <SystemMetricsCard
           title="CPU Usage"
-          value={metrics?.cpu.usage_percent.toFixed(1)}
+          value={metrics ? metrics.cpu.usage_percent.toFixed(1) : ''}
           unit="%"
           loading={loading}
           titleId="cpu-title"
@@ -87,7 +89,7 @@ const SystemOverview: React.FC<SystemOverviewProps> = ({ metrics, loading }) => 
       <Grid item xs={12} sm={6} md={3} sx={{ pt: 3 }}>
         <SystemMetricsCard
           title="Memory Usage"
-          value={metrics?.memory.used_percent.toFixed(1)}
+          value={metrics ? metrics.memory.used_percent.toFixed(1) : ''}
           unit="%"
           loading={loading}
           titleId="memory-title"

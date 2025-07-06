@@ -54,7 +54,7 @@ export const Dashboard: React.FC = () => {
       {metrics && (
         <>
           <Suspense fallback={<LoadingFallback message="Loading system overview..." />}>
-            <SystemOverview metrics={metrics} loading={metricsLoading} />
+            <SystemOverview metrics={metrics} loading={metricsLoading} processTotal={processTotal} />
           </Suspense>
           
           <Suspense fallback={<LoadingFallback message="Loading metrics charts..." />}>
